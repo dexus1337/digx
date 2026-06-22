@@ -1,0 +1,83 @@
+{
+    "version": 3,
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "cacheVariables": {
+                "CMAKE_CXX_STANDARD": "23",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "windows-base",
+            "hidden": true,
+            "inherits": "base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "cl.exe",
+                "CMAKE_CXX_COMPILER": "cl.exe",
+                "CMAKE_SYSTEM_NAME": "Windows",
+                "CMAKE_CXX_FLAGS": "/W4 /EHsc /MP -DDIGX_PLATFORM_WINDOWS"
+            }
+        },
+        {
+            "name": "linux-base",
+            "hidden": true,
+            "inherits": "base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Linux"
+            },
+            "cacheVariables": {
+                "CMAKE_CXX_FLAGS": "-Wall -Wextra -Wpedantic -fPIC -DDIGX_PLATFORM_LINUX"
+            }
+        },
+        {
+            "name": "windows-x64-debug",
+            "displayName": "windows-x64-debug",
+            "inherits": "windows-base",
+            "architecture": { "value": "x64", "strategy": "external" },
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+        },
+        {
+            "name": "windows-x64-release",
+            "displayName": "windows-x64-release",
+            "inherits": "windows-base",
+            "architecture": { "value": "x64", "strategy": "external" },
+            "cacheVariables": { 
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON"
+            }
+        },
+        {
+            "name": "linux-x64-debug",
+            "displayName": "linux-x64-debug",
+            "inherits": "linux-base",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+        },
+        {
+            "name": "linux-x64-release",
+            "displayName": "linux-x64-release",
+            "inherits": "linux-base",
+            "cacheVariables": { 
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "ON"
+            }
+        }
+    ],
+    "buildPresets": [
+        { "name": "windows-x64-debug", "displayName": "windows-x64-debug", "configurePreset": "windows-x64-debug" },
+        { "name": "windows-x64-release", "displayName": "windows-x64-release", "configurePreset": "windows-x64-release" },
+        { "name": "linux-x64-debug", "displayName": "linux-x64-debug", "configurePreset": "linux-x64-debug" },
+        { "name": "linux-x64-release", "displayName": "linux-x64-release", "configurePreset": "linux-x64-release" }
+    ]
+}
