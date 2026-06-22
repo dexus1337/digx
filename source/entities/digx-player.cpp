@@ -1,5 +1,7 @@
 #include "entities/digx-player.hpp"
+
 #include <algorithm>
+#include <cmath>
 
 namespace digx
 {

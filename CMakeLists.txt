@@ -5,7 +5,11 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Configure ZWODEE Engine directory path
-set(ZWODEE_DIR "c:/Users/PC/Documents/git/dexus1337/zwodee" CACHE PATH "Path to the Zwodee Engine root directory")
+set(zwodee_dir $ENV{ZWODEE_ROOT})
+if(NOT zwodee_dir)
+    message(FATAL_ERROR "ZWODEE_ROOT environment variable is not set. Please set it to the path of zwodee engine.")
+endif()
+
 
 # Platform Detection
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
@@ -23,12 +27,10 @@ endif()
 find_package(SDL3 CONFIG REQUIRED)
 
 # Find ZWODEE Library
-find_library(ZWODEE_LIB zwodee
+find_library(zwodee_lib zwodee
     HINTS 
-        "${ZWODEE_DIR}/out/build/windows-x64-debug/bin"
-        "${ZWODEE_DIR}/out/build/linux-x64-debug/bin"
-        "${ZWODEE_DIR}/bin"
-        "${ZWODEE_DIR}/build"
+        "${zwodee_dir}/out/build/windows-x64-debug/bin"
+        "${zwodee_dir}/out/build/linux-x64-debug/bin"
     REQUIRED
 )
 
@@ -41,27 +43,41 @@ add_executable(digx ${source_files} ${app_resources})
 
 target_include_directories(digx 
     PRIVATE include
-    PRIVATE "${ZWODEE_DIR}/include"
+    PRIVATE "${zwodee_dir}/include"
 )
 
 target_link_libraries(digx 
     PRIVATE SDL3::SDL3
-    PRIVATE ${ZWODEE_LIB}
-)
-
-# Set runtime output folder directly to the engine's build directory where DLLs reside
-set_target_properties(digx PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${ZWODEE_DIR}/out/build/windows-x64-debug/bin"
+    PRIVATE ${zwodee_lib}
 )
 
 # Copy ZWODEE Shared Library next to executable so it runs out-of-the-box
 if(WIN32)
-    # Get the directory where ZWODEE_LIB is located
-    get_filename_component(ZWODEE_LIB_DIR ${ZWODEE_LIB} DIRECTORY)
+    # Set runtime output folder directly to the engine's build directory where DLLs reside
+    set_target_properties(digx PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${zwodee_dir}/out/build/windows-x64-debug/bin"
+    )
+
+    # Get the directory where zwodee_dir is located
+    get_filename_component(zwodee_dir_DIR ${zwodee_dir} DIRECTORY)
     
     add_custom_command(TARGET digx POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
             "${CMAKE_CURRENT_SOURCE_DIR}/assets"
-            "${ZWODEE_DIR}/out/build/windows-x64-debug/bin/assets"
+            "${zwodee_dir}/out/build/windows-x64-debug/bin/assets"
+    )
+else()
+    # Set runtime output folder directly to the engine's build directory where DLLs reside
+    set_target_properties(digx PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${zwodee_dir}/out/build/linux-x64-debug/bin"
+    )
+
+    # Get the directory where zwodee_dir is located
+    get_filename_component(zwodee_dir_DIR ${zwodee_dir} DIRECTORY)
+    
+    add_custom_command(TARGET digx POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+            "${zwodee_dir}/out/build/linux-x64-debug/bin/assets"
     )
 endif()
