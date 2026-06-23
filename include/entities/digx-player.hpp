@@ -18,8 +18,12 @@ namespace digx
         player(uint32_t network_id, 
                const zwodee::texture* shovel_idle_tex, 
                const zwodee::texture* shovel_running_tex, 
+               const zwodee::texture* shovel_running_up_tex,
+               const zwodee::texture* shovel_running_down_tex,
                const zwodee::texture* pickaxe_idle_tex, 
                const zwodee::texture* pickaxe_running_tex, 
+               const zwodee::texture* pickaxe_running_up_tex,
+               const zwodee::texture* pickaxe_running_down_tex,
                zwodee::audio_manager* audio);
 
         void tick() override;
@@ -29,6 +33,7 @@ namespace digx
         void collect_gold(int amount = 1);
         void collect_diamond(int amount = 1);
         void collect_garlic(int amount = 1);
+        void use_garlic();
         void collect_onion(int amount = 1);
         void obtain_pickaxe();
         void respawn(float x, float y);
@@ -45,6 +50,7 @@ namespace digx
 
         void set_grid_bounds(int cols, int rows);
         void set_level(zwodee::tile_level* lvl);
+        [[nodiscard]] zwodee::tile_level* get_level() const;
         [[nodiscard]] zwodee::audio_manager* get_audio_manager() const;
 
     private:
@@ -57,8 +63,8 @@ namespace digx
         int m_score = 0;
 
         float m_tunnel_speed = 1.0f;
-        float m_shovel_speed = 0.5f;
-        float m_pickaxe_speed = 0.75f;
+        bool m_is_digging = false;
+        int m_digging_ticks_remaining = 0;
 
         int m_fart_cooldown = 0;
         int m_breath_cooldown = 0;
@@ -79,6 +85,9 @@ namespace digx
         zwodee::input_state m_prev_input;
 
         bool is_tile_blocked(float tx, float ty) const;
+        class stone* get_stone_at(float tx, float ty) const;
+        bool is_tile_clear_for_stone(float tx, float ty) const;
+        bool can_player_move_to(float next_target_x, float next_target_y, float dir_x, float dir_y);
 
         // Contrary release buffers
         int m_contrary_release_buffer_x = 0;
@@ -94,8 +103,12 @@ namespace digx
 
         const zwodee::texture* m_shovel_idle_tex = nullptr;
         const zwodee::texture* m_shovel_running_tex = nullptr;
+        const zwodee::texture* m_shovel_running_up_tex = nullptr;
+        const zwodee::texture* m_shovel_running_down_tex = nullptr;
         const zwodee::texture* m_pickaxe_idle_tex = nullptr;
         const zwodee::texture* m_pickaxe_running_tex = nullptr;
+        const zwodee::texture* m_pickaxe_running_up_tex = nullptr;
+        const zwodee::texture* m_pickaxe_running_down_tex = nullptr;
         zwodee::audio_manager* m_audio = nullptr;
         bool m_facing_left = false;
     };

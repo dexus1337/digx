@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include "levels/digx-level.hpp"
+#include "entities/digx-stone.hpp"
 
 namespace
 {
@@ -13,6 +15,16 @@ namespace
             audio->play_sound("running_" + std::to_string(rand_idx));
         }
     }
+
+    void play_dig_sound(zwodee::audio_manager* audio, bool is_pickaxe)
+    {
+        if (audio)
+        {
+            int rand_idx = (std::rand() % 4) + 1;
+            std::string sound_name = (is_pickaxe ? "pickaxe_dig_" : "shovel_dig_") + std::to_string(rand_idx);
+            audio->play_sound(sound_name);
+        }
+    }
 }
 
 namespace digx
@@ -20,14 +32,22 @@ namespace digx
     player::player(uint32_t network_id, 
                    const zwodee::texture* shovel_idle_tex, 
                    const zwodee::texture* shovel_running_tex, 
+                   const zwodee::texture* shovel_running_up_tex,
+                   const zwodee::texture* shovel_running_down_tex,
                    const zwodee::texture* pickaxe_idle_tex, 
                    const zwodee::texture* pickaxe_running_tex, 
+                   const zwodee::texture* pickaxe_running_up_tex,
+                   const zwodee::texture* pickaxe_running_down_tex,
                    zwodee::audio_manager* audio)
         : zwodee::entity_player(network_id, shovel_idle_tex, 100),
           m_shovel_idle_tex(shovel_idle_tex),
           m_shovel_running_tex(shovel_running_tex),
+          m_shovel_running_up_tex(shovel_running_up_tex),
+          m_shovel_running_down_tex(shovel_running_down_tex),
           m_pickaxe_idle_tex(pickaxe_idle_tex),
           m_pickaxe_running_tex(pickaxe_running_tex),
+          m_pickaxe_running_up_tex(pickaxe_running_up_tex),
+          m_pickaxe_running_down_tex(pickaxe_running_down_tex),
           m_audio(audio)
     {
         set_speed(m_tunnel_speed);
@@ -202,63 +222,147 @@ namespace digx
         // Grid-locked movement updates
         if (m_is_moving)
         {
-            m_vx = m_dir_x * get_speed();
-            m_vy = m_dir_y * get_speed();
-            m_x += m_vx;
-            m_y += m_vy;
-
-            // Check if we reached or overshot the destination coordinates on both axes
-            bool reached_x = (m_dir_x == 0.0f) || 
-                             (m_dir_x > 0.0f && m_x >= m_target_x) || 
-                             (m_dir_x < 0.0f && m_x <= m_target_x);
-            bool reached_y = (m_dir_y == 0.0f) || 
-                             (m_dir_y > 0.0f && m_y >= m_target_y) || 
-                             (m_dir_y < 0.0f && m_y <= m_target_y);
-
-            if (reached_x && reached_y)
+            if (m_is_digging)
             {
-                m_x = m_target_x;
-                m_y = m_target_y;
+                m_digging_ticks_remaining--;
                 m_vx = 0.0f;
                 m_vy = 0.0f;
-                m_is_moving = false;
 
-                // Process queued steps first
-                if (m_queued_steps > 0)
+                if (m_has_pickaxe)
                 {
-                    float next_target_x = m_x + m_dir_x * 32.0f;
-                    float next_target_y = m_y + m_dir_y * 32.0f;
-
-                    if (!is_tile_blocked(next_target_x, next_target_y))
+                    if (m_digging_ticks_remaining == 47)
                     {
-                        m_target_x = next_target_x;
-                        m_target_y = next_target_y;
-                        m_is_moving = true;
-                        m_queued_steps--;
-                        play_footstep(m_audio);
-                    }
-                    else
-                    {
-                        m_queued_steps = 0; // Blocked, clear the queue
+                        play_dig_sound(m_audio, true);
                     }
                 }
-
-                // Process queued turn/new direction movement if we stopped
-                if (!m_is_moving && m_has_queued_move)
+                else
                 {
-                    float next_target_x = m_x + m_queued_dir_x * 32.0f;
-                    float next_target_y = m_y + m_queued_dir_y * 32.0f;
-
-                    if (!is_tile_blocked(next_target_x, next_target_y))
+                    if (m_digging_ticks_remaining == 95 || m_digging_ticks_remaining == 47)
                     {
-                        m_target_x = next_target_x;
-                        m_target_y = next_target_y;
-                        m_dir_x = m_queued_dir_x;
-                        m_dir_y = m_queued_dir_y;
-                        m_is_moving = true;
-                        play_footstep(m_audio);
+                        play_dig_sound(m_audio, false);
                     }
-                    m_has_queued_move = false;
+                }
+                
+                if (m_digging_ticks_remaining <= 0)
+                {
+                    m_is_digging = false;
+                    
+                    // Dig the tile!
+                    if (m_level)
+                    {
+                        int tgx = static_cast<int>(std::round(m_target_x / 32.0f));
+                        int tgy = static_cast<int>(std::round(m_target_y / 32.0f));
+                        if (auto* digx_lvl = dynamic_cast<digx::level*>(m_level))
+                        {
+                            digx_lvl->dig_tile(tgx, tgy);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                m_vx = m_dir_x * m_tunnel_speed;
+                m_vy = m_dir_y * m_tunnel_speed;
+                m_x += m_vx;
+                m_y += m_vy;
+
+                // Check if we reached or overshot the destination coordinates on both axes
+                bool reached_x = (m_dir_x == 0.0f) || 
+                                 (m_dir_x > 0.0f && m_x >= m_target_x) || 
+                                 (m_dir_x < 0.0f && m_x <= m_target_x);
+                bool reached_y = (m_dir_y == 0.0f) || 
+                                 (m_dir_y > 0.0f && m_y >= m_target_y) || 
+                                 (m_dir_y < 0.0f && m_y <= m_target_y);
+
+                if (reached_x && reached_y)
+                {
+                    m_x = m_target_x;
+                    m_y = m_target_y;
+                    m_vx = 0.0f;
+                    m_vy = 0.0f;
+                    m_is_moving = false;
+
+                    // Process queued steps first
+                    if (m_queued_steps > 0)
+                    {
+                        float next_target_x = m_x + m_dir_x * 32.0f;
+                        float next_target_y = m_y + m_dir_y * 32.0f;
+
+                        if (can_player_move_to(next_target_x, next_target_y, m_dir_x, m_dir_y))
+                        {
+                            m_target_x = next_target_x;
+                            m_target_y = next_target_y;
+                            m_is_moving = true;
+                            m_queued_steps--;
+
+                            bool target_undigged = false;
+                            if (m_level)
+                            {
+                                int tgx = static_cast<int>(std::round(m_target_x / 32.0f));
+                                int tgy = static_cast<int>(std::round(m_target_y / 32.0f));
+                                if (auto* digx_lvl = dynamic_cast<digx::level*>(m_level))
+                                {
+                                    target_undigged = !digx_lvl->is_tile_digged(tgx, tgy);
+                                }
+                            }
+                            if (target_undigged)
+                            {
+                                m_is_digging = true;
+                                m_digging_ticks_remaining = m_has_pickaxe ? 48 : 96;
+                            }
+                            else
+                            {
+                                m_is_digging = false;
+                                m_digging_ticks_remaining = 0;
+                            }
+
+                            play_footstep(m_audio);
+                        }
+                        else
+                        {
+                            m_queued_steps = 0; // Blocked, clear the queue
+                        }
+                    }
+
+                    // Process queued turn/new direction movement if we stopped
+                    if (!m_is_moving && m_has_queued_move)
+                    {
+                        float next_target_x = m_x + m_queued_dir_x * 32.0f;
+                        float next_target_y = m_y + m_queued_dir_y * 32.0f;
+
+                        if (can_player_move_to(next_target_x, next_target_y, m_queued_dir_x, m_queued_dir_y))
+                        {
+                            m_target_x = next_target_x;
+                            m_target_y = next_target_y;
+                            m_dir_x = m_queued_dir_x;
+                            m_dir_y = m_queued_dir_y;
+                            m_is_moving = true;
+
+                            bool target_undigged = false;
+                            if (m_level)
+                            {
+                                int tgx = static_cast<int>(std::round(m_target_x / 32.0f));
+                                int tgy = static_cast<int>(std::round(m_target_y / 32.0f));
+                                if (auto* digx_lvl = dynamic_cast<digx::level*>(m_level))
+                                {
+                                    target_undigged = !digx_lvl->is_tile_digged(tgx, tgy);
+                                }
+                            }
+                            if (target_undigged)
+                            {
+                                m_is_digging = true;
+                                m_digging_ticks_remaining = m_has_pickaxe ? 48 : 96;
+                            }
+                            else
+                            {
+                                m_is_digging = false;
+                                m_digging_ticks_remaining = 0;
+                            }
+
+                            play_footstep(m_audio);
+                        }
+                        m_has_queued_move = false;
+                    }
                 }
             }
         }
@@ -281,18 +385,63 @@ namespace digx
                 dir_y = (active_btn == zwodee::input_state::move_up) ? -1.0f : 1.0f;
             }
 
+            // Prevent diagonal movement (45 degrees) by resolving to a single axis
+            if (dir_x != 0.0f && dir_y != 0.0f)
+            {
+                float target_x_only = m_x + dir_x * 32.0f;
+                bool horiz_clear = can_player_move_to(target_x_only, m_y, dir_x, 0.0f);
+
+                float target_y_only = m_y + dir_y * 32.0f;
+                bool vert_clear = can_player_move_to(m_x, target_y_only, 0.0f, dir_y);
+
+                if (horiz_clear && !vert_clear)
+                {
+                    dir_y = 0.0f;
+                }
+                else if (vert_clear && !horiz_clear)
+                {
+                    dir_x = 0.0f;
+                }
+                else
+                {
+                    dir_y = 0.0f; // Prioritize horizontal axis when both are clear
+                }
+            }
+
             if (dir_x != 0.0f || dir_y != 0.0f)
             {
                 float next_target_x = m_x + dir_x * 32.0f;
                 float next_target_y = m_y + dir_y * 32.0f;
 
-                if (!is_tile_blocked(next_target_x, next_target_y))
+                if (can_player_move_to(next_target_x, next_target_y, dir_x, dir_y))
                 {
                     m_target_x = next_target_x;
                     m_target_y = next_target_y;
                     m_dir_x = dir_x;
                     m_dir_y = dir_y;
                     m_is_moving = true;
+
+                    bool target_undigged = false;
+                    if (m_level)
+                    {
+                        int tgx = static_cast<int>(std::round(m_target_x / 32.0f));
+                        int tgy = static_cast<int>(std::round(m_target_y / 32.0f));
+                        if (auto* digx_lvl = dynamic_cast<digx::level*>(m_level))
+                        {
+                            target_undigged = !digx_lvl->is_tile_digged(tgx, tgy);
+                        }
+                    }
+                    if (target_undigged)
+                    {
+                        m_is_digging = true;
+                        m_digging_ticks_remaining = m_has_pickaxe ? 48 : 96;
+                    }
+                    else
+                    {
+                        m_is_digging = false;
+                        m_digging_ticks_remaining = 0;
+                    }
+
                     play_footstep(m_audio);
                 }
             }
@@ -315,11 +464,47 @@ namespace digx
         const zwodee::texture* target_tex = nullptr;
         if (m_has_pickaxe)
         {
-            target_tex = m_is_moving ? m_pickaxe_running_tex : m_pickaxe_idle_tex;
+            if (m_is_moving)
+            {
+                if (m_dir_y < 0.0f)
+                {
+                    target_tex = m_pickaxe_running_up_tex;
+                }
+                else if (m_dir_y > 0.0f)
+                {
+                    target_tex = m_pickaxe_running_down_tex;
+                }
+                else
+                {
+                    target_tex = m_pickaxe_running_tex;
+                }
+            }
+            else
+            {
+                target_tex = m_pickaxe_idle_tex;
+            }
         }
         else
         {
-            target_tex = m_is_moving ? m_shovel_running_tex : m_shovel_idle_tex;
+            if (m_is_moving)
+            {
+                if (m_dir_y < 0.0f)
+                {
+                    target_tex = m_shovel_running_up_tex;
+                }
+                else if (m_dir_y > 0.0f)
+                {
+                    target_tex = m_shovel_running_down_tex;
+                }
+                else
+                {
+                    target_tex = m_shovel_running_tex;
+                }
+            }
+            else
+            {
+                target_tex = m_shovel_idle_tex;
+            }
         }
         if (target_tex)
         {
@@ -329,14 +514,8 @@ namespace digx
 
     void player::set_digging(bool is_digging)
     {
-        if (!is_digging)
-        {
-            set_speed(m_tunnel_speed);
-            return;
-        }
-
-        float speed = m_has_pickaxe ? m_pickaxe_speed : m_shovel_speed;
-        set_speed(speed);
+        (void)is_digging;
+        set_speed(m_tunnel_speed);
     }
 
     void player::collect_gold(int amount)
@@ -354,6 +533,14 @@ namespace digx
     void player::collect_garlic(int amount)
     {
         m_garlic_count += amount;
+    }
+
+    void player::use_garlic()
+    {
+        if (m_garlic_count > 0)
+        {
+            m_garlic_count--;
+        }
     }
 
     void player::collect_onion(int amount)
@@ -429,6 +616,11 @@ namespace digx
     {
         m_level = lvl;
     }
+
+    zwodee::tile_level* player::get_level() const
+    {
+        return m_level;
+    }
     
     zwodee::audio_manager* player::get_audio_manager() const
     {
@@ -460,5 +652,92 @@ namespace digx
             }
         }
         return false;
+    }
+
+    stone* player::get_stone_at(float tx, float ty) const
+    {
+        if (m_level)
+        {
+            int tgx = static_cast<int>(std::round(tx / 32.0f));
+            int tgy = static_cast<int>(std::round(ty / 32.0f));
+            for (const auto& ent : m_level->get_entities())
+            {
+                if (auto* st = dynamic_cast<stone*>(ent.get()))
+                {
+                    int sgx = static_cast<int>(std::round(st->get_x() / 32.0f));
+                    int sgy = static_cast<int>(std::round(st->get_y() / 32.0f));
+                    if (sgx == tgx && sgy == tgy && !st->is_dead())
+                    {
+                        return st;
+                    }
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    bool player::is_tile_clear_for_stone(float tx, float ty) const
+    {
+        if (tx < 0.0f || tx > (m_level_cols - 1) * 32.0f ||
+            ty < 0.0f || ty > (m_level_rows - 1) * 32.0f)
+        {
+            return false;
+        }
+
+        if (is_tile_blocked(tx, ty))
+        {
+            return false;
+        }
+
+        if (m_level)
+        {
+            int gx = static_cast<int>(tx / 32.0f);
+            int gy = static_cast<int>(ty / 32.0f);
+            if (auto* digx_lvl = dynamic_cast<digx::level*>(m_level))
+            {
+                if (!digx_lvl->is_tile_digged(gx, gy))
+                {
+                    return false;
+                }
+            }
+        }
+
+        if (get_stone_at(tx, ty))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    bool player::can_player_move_to(float next_target_x, float next_target_y, float dir_x, float dir_y)
+    {
+        if (is_tile_blocked(next_target_x, next_target_y))
+        {
+            return false;
+        }
+
+        if (auto* st = get_stone_at(next_target_x, next_target_y))
+        {
+            if (dir_y != 0.0f)
+            {
+                return false;
+            }
+
+            float stone_target_x = next_target_x + dir_x * 32.0f;
+            float stone_target_y = next_target_y + dir_y * 32.0f;
+            if (is_tile_clear_for_stone(stone_target_x, stone_target_y))
+            {
+                st->start_move(dir_x, 0.0f);
+                if (m_audio)
+                {
+                    m_audio->play_sound("stone_move");
+                }
+                return true;
+            }
+            return false;
+        }
+
+        return true;
     }
 }

@@ -28,6 +28,7 @@ namespace digx
 
     private:
         bool m_is_spawned = false;
-        float m_speed = 1.0f;
+        float m_speed = 0.4f;
+        int m_dir_change_ticks = 0;
     };
 }

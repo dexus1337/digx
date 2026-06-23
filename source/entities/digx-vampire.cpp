@@ -1,5 +1,7 @@
 #include "entities/digx-vampire.hpp"
 #include "entities/digx-player.hpp"
+#include "levels/digx-level.hpp"
+
 #include <cmath>
 
 namespace digx
@@ -13,10 +15,14 @@ namespace digx
 
     void vampire::tick()
     {
+        zwodee::entity::tick();
     }
 
     void vampire::update_behavior(player* player)
     {
+        m_vx = 0.0f;
+        m_vy = 0.0f;
+
         if (!player || m_is_neutralized)
         {
             return;
@@ -40,7 +46,16 @@ namespace digx
 
         if (m_is_active && dist < 16.0f)
         {
-            player->take_damage(999);
+            if (player->get_garlic_count() > 0)
+            {
+                player->use_garlic();
+                m_is_neutralized = true;
+                m_is_active = false;
+            }
+            else
+            {
+                player->take_damage(999);
+            }
         }
     }
 

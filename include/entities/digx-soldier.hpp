@@ -27,11 +27,9 @@ namespace digx
         [[nodiscard]] float get_stun_time_remaining() const;
 
     private:
-        float m_patrol_speed = 1.5f;
-        bool m_moving_right = true;
-        float m_patrol_min_x = 0.0f;
-        float m_patrol_max_x = 300.0f;
-
+        float m_patrol_speed = 0.4f;
         int m_stun_ticks = 0; // Number of ticks remaining for stun
+        player* m_player = nullptr;
+        int m_dir_change_ticks = 0;
     };
 }

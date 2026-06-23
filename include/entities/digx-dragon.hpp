@@ -26,9 +26,10 @@ namespace digx
         void take_damage(int amount) override; // Overridden to be invincible
 
     private:
-        float m_speed = 2.0f;
+        float m_speed = 0.4f;
         bool m_moving_right = true;
         float m_min_x = 0.0f;
         float m_max_x = 500.0f;
+        player* m_player = nullptr;
     };
 }

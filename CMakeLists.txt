@@ -64,44 +64,32 @@ get_filename_component(zwodee_dir_DIR ${zwodee_dir} DIRECTORY)
 
 
 # Copy ZWODEE Shared Library next to executable so it runs out-of-the-box
-if(WIN32)
-    if(CMAKE_BUILD_TYPE MATCHES "Debug")
-        # Set runtime output folder directly to the engine's build directory where DLLs reside
+# Determine the active output directory where the binary will sit
+if(CMAKE_BUILD_TYPE MATCHES "Debug")
+    if(WIN32)
+        set(OUTPUT_ASSETS_DIR "${zwodee_dir}/out/build/windows-x64-debug/bin/assets")
         set_target_properties(digx PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${zwodee_dir}/out/build/windows-x64-debug/bin")
-        
-        add_custom_command(TARGET digx POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CMAKE_CURRENT_SOURCE_DIR}/assets"
-                "${zwodee_dir}/out/build/windows-x64-debug/bin/assets"
-        )
     else()
-        # Set runtime output folder directly to the engine's build directory where DLLs reside
-        set_target_properties(digx PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${zwodee_dir}/out/build/windows-x64-release/bin")
-        
-        add_custom_command(TARGET digx POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CMAKE_CURRENT_SOURCE_DIR}/assets"
-                "${zwodee_dir}/out/build/windows-x64-release/bin/assets"
-        )
+        set(OUTPUT_ASSETS_DIR "${zwodee_dir}/out/build/linux-x64-debug/bin/assets")
+        set_target_properties(digx PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${zwodee_dir}/out/build/linux-x64-debug/bin")
     endif()
 else()
-    if(CMAKE_BUILD_TYPE MATCHES "Debug")
-        # Set runtime output folder directly to the engine's build directory where DLLs reside
-        set_target_properties(digx PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${zwodee_dir}/out/build/linux-x64-debug/bin")
-        
-        add_custom_command(TARGET digx POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CMAKE_CURRENT_SOURCE_DIR}/assets"
-                "${zwodee_dir}/out/build/linux-x64-debug/bin/assets"
-        )
+    if(WIN32)
+        set(OUTPUT_ASSETS_DIR "${zwodee_dir}/out/build/windows-x64-release/bin/assets")
+        set_target_properties(digx PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${zwodee_dir}/out/build/windows-x64-release/bin")
     else()
-        # Set runtime output folder directly to the engine's build directory where DLLs reside
+        set(OUTPUT_ASSETS_DIR "${zwodee_dir}/out/build/linux-x64-release/bin/assets")
         set_target_properties(digx PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${zwodee_dir}/out/build/linux-x64-release/bin")
-        
-        add_custom_command(TARGET digx POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${CMAKE_CURRENT_SOURCE_DIR}/assets"
-                "${zwodee_dir}/out/build/linux-x64-release/bin/assets"
-        )
     endif()
 endif()
+
+# Create a custom copy target that is ALWAYS marked out-of-date
+add_custom_target(copy_assets ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets"
+        "${OUTPUT_ASSETS_DIR}"
+    COMMENT "Syncing assets to output directory..."
+)
+
+# Force the main executable to depend on the assets copy target
+add_dependencies(digx copy_assets)
