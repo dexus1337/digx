@@ -18,7 +18,7 @@ namespace digx
     class level : public zwodee::tile_level
     {
     public:
-        level(uint32_t width, uint32_t height);
+        level(uint32_t width, uint32_t height, int level_number = 1);
         ~level() override = default;
 
         void on_enter() override;
@@ -70,6 +70,7 @@ namespace digx
         std::shared_ptr<zwodee::texture> m_soldier_tex;
         std::shared_ptr<zwodee::texture> m_mummy_tex;
         std::shared_ptr<zwodee::texture> m_dragon_tex;
+        std::shared_ptr<zwodee::texture> m_dirt_tex;
 
         // Target number of gold coins to collect to open the exit
         int m_target_gold = 0;
@@ -81,5 +82,9 @@ namespace digx
         
         // Track visual state of lamp (reveal diamonds)
         float m_lamp_timer = 0.0f;
+
+        int m_level_number = 1;
+        float m_current_darkness = 1.0f;
+        float m_target_darkness = 1.0f;
     };
 }

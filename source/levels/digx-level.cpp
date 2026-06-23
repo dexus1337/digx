@@ -19,9 +19,11 @@
 
 namespace digx
 {
-    level::level(uint32_t width, uint32_t height)
-        : zwodee::tile_level(width, height)
+    level::level(uint32_t width, uint32_t height, int level_number)
+        : zwodee::tile_level(width, height), m_level_number(level_number)
     {
+        m_target_darkness = std::max(0.2f, 1.0f - (level_number - 1) * 0.15f);
+        m_current_darkness = 1.0f; // Smoothly fades to target darkness on entry
     }
 
     void level::on_enter()
@@ -36,6 +38,16 @@ namespace digx
 
     void level::tick()
     {
+        // Smoothly interpolate level darkness
+        if (m_current_darkness != m_target_darkness)
+        {
+            m_current_darkness += (m_target_darkness - m_current_darkness) * 0.02f;
+            if (std::abs(m_current_darkness - m_target_darkness) < 0.001f)
+            {
+                m_current_darkness = m_target_darkness;
+            }
+        }
+
         zwodee::tile_level::tick();
 
         if (!m_player)
@@ -405,13 +417,14 @@ namespace digx
             std::shared_ptr<zwodee::texture> soldier_tex;
             std::shared_ptr<zwodee::texture> mummy_tex;
             std::shared_ptr<zwodee::texture> dragon_tex;
-
+            std::shared_ptr<zwodee::texture> dirt_tex;
+ 
             bool loaded = false;
-
+ 
             void load_all(zwodee::renderer& r)
             {
                 if (loaded) return;
-
+ 
                 player_shovel_tex             = r.load_dds_texture("assets/textures/goblin-idle-shovel.dds");
                 player_shovel_running_tex     = r.load_dds_texture("assets/textures/goblin-running-shovel.dds");
                 player_shovel_running_up_tex  = r.load_dds_texture("assets/textures/goblin-running-up-shovel.dds");
@@ -430,12 +443,12 @@ namespace digx
                 garlic_tex                    = r.load_dds_texture("assets/textures/garlic.dds");
                 onion_tex                     = r.load_dds_texture("assets/textures/onion.dds");
                 digged_tex                    = r.load_dds_texture("assets/textures/digged.dds");
-                
+                 
                 static_stone_textures[0]      = r.load_dds_texture("assets/textures/stone-1.dds");
                 static_stone_textures[1]      = r.load_dds_texture("assets/textures/stone-2.dds");
                 static_stone_textures[2]      = r.load_dds_texture("assets/textures/stone-3.dds");
                 static_stone_textures[3]      = r.load_dds_texture("assets/textures/stone-4.dds");
-
+ 
                 const std::vector<std::string> diamond_colors = { "green", "orange", "purple", "blue" };
                 for (const auto& color : diamond_colors)
                 {
@@ -444,15 +457,16 @@ namespace digx
                         diamond_textures.push_back(std::move(tex));
                     }
                 }
-                
-                bg_tex                        = r.load_dds_texture("assets/textures/background.dds");
+                 
+                bg_tex                        = r.load_dds_texture("assets/textures/header.dds");
                 fallback_tex                  = create_solid_color_texture(r, 32, 32, 255, 0, 0, 255);
-
+ 
                 vampire_tex                   = r.load_dds_texture("assets/textures/vampire.dds");
                 soldier_tex                   = r.load_dds_texture("assets/textures/soldier.dds");
                 mummy_tex                     = r.load_dds_texture("assets/textures/mummy.dds");
                 dragon_tex                    = r.load_dds_texture("assets/textures/dragon.dds");
-
+                dirt_tex                      = r.load_dds_texture("assets/textures/dirt.dds");
+ 
                 loaded = true;
             }
         };
@@ -523,6 +537,7 @@ namespace digx
         m_soldier_tex                   = g_textures.soldier_tex;
         m_mummy_tex                     = g_textures.mummy_tex;
         m_dragon_tex                    = g_textures.dragon_tex;
+        m_dirt_tex                      = g_textures.dirt_tex;
 
         const zwodee::texture* shovel_idle = m_player_shovel_tex ? m_player_shovel_tex.get() : m_fallback_tex.get();
         const zwodee::texture* shovel_run = m_player_shovel_running_tex ? m_player_shovel_running_tex.get() : m_fallback_tex.get();
@@ -543,25 +558,50 @@ namespace digx
         const zwodee::texture* onion_tex = m_onion_tex ? m_onion_tex.get() : m_fallback_tex.get();
         const zwodee::texture* fallback_tex_ptr = m_fallback_tex.get();
 
-        if (m_bg_tex)
+        // Remove full stretched background texture
+        set_background_texture(nullptr);
+
+        // Populate the entire grid with header, footer, and dirt tiles
+        const zwodee::texture* bg_tex_ptr = m_bg_tex ? m_bg_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* dirt_tex_ptr = m_dirt_tex ? m_dirt_tex.get() : fallback_tex_ptr;
+
+        for (uint32_t y = 0; y < get_height(); ++y)
         {
-            set_background_texture(m_bg_tex.get());
+            for (uint32_t x = 0; x < get_width(); ++x)
+            {
+                if (y == 0 || y == 34)
+                {
+                    // Empty grid space (rendered as stretched header/footer)
+                    set_tile(x, y, 0, 0, nullptr);
+                }
+                else
+                {
+                    // Un-digged dirt earth by default (non-collidable so player can dig into them)
+                    set_tile(x, y, 2, 1, dirt_tex_ptr);
+                    size_t idx = static_cast<size_t>(y) * get_width() + x;
+                    if (idx < get_static_objects().size() && get_static_objects()[idx])
+                    {
+                        get_static_objects()[idx]->set_collidable(false);
+                        get_static_objects()[idx]->set_flip_horizontal(std::rand() % 2 == 0);
+                    }
+                }
+            }
         }
 
         // Initialize outer borders and inner walls of static stones
         std::vector<std::pair<int, int>> static_stone_positions;
         
         // Left and Right outer borders
-        for (int y = 2; y <= 32; ++y)
+        for (int y = 1; y <= 33; ++y)
         {
             static_stone_positions.push_back({0, y});
             static_stone_positions.push_back({34, y});
         }
-        // Top and Bottom outer borders (defining the 2-tile margin offset at top/bottom)
+        // Top and Bottom outer borders (defining the 1-tile margin offset at top/bottom)
         for (int x = 1; x < 34; ++x)
         {
-            static_stone_positions.push_back({x, 2});
-            static_stone_positions.push_back({x, 32});
+            static_stone_positions.push_back({x, 1});
+            static_stone_positions.push_back({x, 33});
         }
 
         // Inner walls with gaps to allow player passage/exploration
@@ -829,8 +869,9 @@ namespace digx
         add_entity(std::move(dr1));
 
         // Add exit door at bottom right
+        dig_tile_at(32, 32);
         auto door = std::make_unique<exit_door>(15, door_closed, door_open);
-        door->set_grid_position(32, 31);
+        door->set_grid_position(32, 32);
         add_entity(std::move(door));
     }
 
@@ -984,6 +1025,59 @@ namespace digx
             if (max_camera_y < 0.0f) max_camera_y = 0.0f;
             if (camera_y < 0.0f) camera_y = 0.0f;
             if (camera_y > max_camera_y) camera_y = max_camera_y;
+
+            // Apply level darkness and vertical depth gradient to dirt tiles
+            for (auto& node : snapshot)
+            {
+                if (node.tex && node.tex == m_dirt_tex.get())
+                {
+                    // Calculate depth factor based on absolute level y coordinate (from y = 64 to y = 1024)
+                    float depth_factor = (node.y - 64.0f) / (1024.0f - 64.0f);
+                    if (depth_factor < 0.0f) depth_factor = 0.0f;
+                    if (depth_factor > 1.0f) depth_factor = 1.0f;
+                    
+                    // Smooth gradient: 1.0f (fully bright) at top, 0.05f (95% darker) at the bottom
+                    float vertical_mult = 1.0f - depth_factor * 0.70f;
+                    
+                    float total_darkness = m_current_darkness * vertical_mult;
+                    node.color_mod = static_cast<uint8_t>(total_darkness * 255.0f);
+                }
+            }
+
+            // Add stretched header and footer nodes
+            if (m_bg_tex)
+            {
+                // Header (flipped horizontally)
+                zwodee::render_node header_node;
+                header_node.x = 0.0f;
+                header_node.y = 0.0f;
+                header_node.w = static_cast<float>(get_width() * 32);
+                header_node.h = 32.0f;
+                header_node.tex = m_bg_tex.get();
+                header_node.src_x = 0;
+                header_node.src_y = 0;
+                header_node.src_w = m_bg_tex->get_width();
+                header_node.src_h = m_bg_tex->get_height();
+                header_node.flip_horizontal = true;
+                header_node.color_mod = 255;
+                snapshot.push_back(header_node);
+
+                // Footer (flipped vertically)
+                zwodee::render_node footer_node;
+                footer_node.x = 0.0f;
+                footer_node.y = static_cast<float>((get_height() - 1) * 32);
+                footer_node.w = static_cast<float>(get_width() * 32);
+                footer_node.h = 32.0f;
+                footer_node.tex = m_bg_tex.get();
+                footer_node.src_x = 0;
+                footer_node.src_y = 0;
+                footer_node.src_w = m_bg_tex->get_width();
+                footer_node.src_h = m_bg_tex->get_height();
+                footer_node.flip_horizontal = false;
+                footer_node.flip_vertical = true;
+                footer_node.color_mod = 255;
+                snapshot.push_back(footer_node);
+            }
 
             // Apply the camera offset to all rendering positions
             for (auto& node : snapshot)
