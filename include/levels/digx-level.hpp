@@ -26,7 +26,7 @@ namespace digx
         void render(zwodee::renderer& target_renderer, double alpha) override;
         zwodee::render_snapshot get_render_snapshot(int display_w, int display_h) const override;
 
-        void load_demo_level(zwodee::renderer& r);
+        void load_demo_level(zwodee::engine& engine);
 
         [[nodiscard]] player* get_player() const;
 
@@ -35,11 +35,17 @@ namespace digx
         
         // Textures owned by the level
         std::unique_ptr<zwodee::texture> m_player_shovel_tex;
+        std::unique_ptr<zwodee::texture> m_player_shovel_running_tex;
         std::unique_ptr<zwodee::texture> m_player_pickaxe_tex;
+        std::unique_ptr<zwodee::texture> m_player_pickaxe_running_tex;
         std::unique_ptr<zwodee::texture> m_stone_black_tex;
         std::unique_ptr<zwodee::texture> m_stone_grey_tex;
         std::unique_ptr<zwodee::texture> m_stone_brown_tex;
         std::unique_ptr<zwodee::texture> m_pickaxe_tex;
+        std::unique_ptr<zwodee::texture> m_coin_tex;
+        std::unique_ptr<zwodee::texture> m_door_closed_tex;
+        std::unique_ptr<zwodee::texture> m_door_open_tex;
+        std::vector<std::unique_ptr<zwodee::texture>> m_diamond_textures;
         std::unique_ptr<zwodee::texture> m_bg_tex;
         std::unique_ptr<zwodee::texture> m_fallback_tex;
 

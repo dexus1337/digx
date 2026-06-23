@@ -11,6 +11,7 @@
 #include "items/digx-garlic-bulb.hpp"
 #include "items/digx-onion-bulb.hpp"
 #include "items/digx-pickaxe.hpp"
+#include "items/digx-exit-door.hpp"
 
 #include <SDL3/SDL.h>
 #include <cmath>
@@ -96,11 +97,19 @@ namespace digx
                 {
                     m_player->collect_gold();
                     gc->take_damage(999); // "collect" it
+                    if (auto* audio = m_player->get_audio_manager())
+                    {
+                        audio->play_sound("coin_collected");
+                    }
                 }
                 else if (auto* d = dynamic_cast<diamond*>(ent.get()))
                 {
                     m_player->collect_diamond();
                     d->take_damage(999);
+                    if (auto* audio = m_player->get_audio_manager())
+                    {
+                        audio->play_sound("diamond_collected");
+                    }
                 }
                 else if (auto* dl = dynamic_cast<lamp*>(ent.get()))
                 {
@@ -128,6 +137,14 @@ namespace digx
                 {
                     m_player->obtain_pickaxe();
                     pa->take_damage(999);
+                }
+                else if (auto* door = dynamic_cast<exit_door*>(ent.get()))
+                {
+                    if (door->is_open())
+                    {
+                        // Exit reached!
+                        // e.g. complete level or win logic here
+                    }
                 }
             }
 
@@ -164,6 +181,17 @@ namespace digx
         if (!m_exit_open && m_player->get_gold_count() >= m_target_gold)
         {
             m_exit_open = true;
+            for (const auto& ent : get_entities())
+            {
+                if (auto* door = dynamic_cast<exit_door*>(ent.get()))
+                {
+                    door->open();
+                }
+            }
+            if (auto* audio = m_player->get_audio_manager())
+            {
+                audio->play_sound("level_done");
+            }
         }
     }
 
@@ -193,24 +221,57 @@ namespace digx
         }
     }
 
-    void level::load_demo_level(zwodee::renderer& r)
+    void level::load_demo_level(zwodee::engine& engine)
     {
-        // Load textures inside level class
-        m_player_shovel_tex = r.load_dds_texture("assets/goblin-idle-shovel.dds");
-        m_player_pickaxe_tex = r.load_dds_texture("assets/goblin-idle-pickaxe.dds");
-        m_stone_black_tex = r.load_dds_texture("assets/stone-black.dds");
-        m_stone_grey_tex = r.load_dds_texture("assets/stone-grey.dds");
-        m_stone_brown_tex = r.load_dds_texture("assets/stone-brown.dds");
-        m_pickaxe_tex = r.load_dds_texture("assets/pickaxe.dds");
-        m_bg_tex = r.load_dds_texture("assets/background.dds");
-        m_fallback_tex = create_solid_color_texture(r, 32, 32, 255, 0, 0, 255);
+        auto& r = engine.get_renderer();
+        auto& audio = engine.get_audio_manager();
 
-        const zwodee::texture* player_tex = m_player_shovel_tex ? m_player_shovel_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* pickaxe_player_tex = m_player_pickaxe_tex ? m_player_pickaxe_tex.get() : m_fallback_tex.get();
+        // Load game sounds
+        for (int i = 1; i <= 8; ++i)
+        {
+            audio.load_sound("running_" + std::to_string(i), "assets/sounds/running/running-" + std::to_string(i) + ".wav");
+        }
+        audio.load_sound("coin_collected", "assets/sounds/coin-collected.wav");
+        audio.load_sound("diamond_collected", "assets/sounds/diamond-collected.wav");
+        audio.load_sound("level_done", "assets/sounds/level-done.wav");
+
+        // Load textures inside level class
+        m_player_shovel_tex             = r.load_dds_texture("assets/textures/goblin-idle-shovel.dds");
+        m_player_shovel_running_tex     = r.load_dds_texture("assets/textures/goblin-running-shovel.dds");
+        m_player_pickaxe_tex            = r.load_dds_texture("assets/textures/goblin-idle-pickaxe.dds");
+        m_player_pickaxe_running_tex    = r.load_dds_texture("assets/textures/goblin-running-pickaxe.dds");
+        m_stone_black_tex               = r.load_dds_texture("assets/textures/stone-black.dds");
+        m_stone_grey_tex                = r.load_dds_texture("assets/textures/stone-grey.dds");
+        m_stone_brown_tex               = r.load_dds_texture("assets/textures/stone-brown.dds");
+        m_pickaxe_tex                   = r.load_dds_texture("assets/textures/pickaxe.dds");
+        m_coin_tex                      = r.load_dds_texture("assets/textures/coin.dds");
+        m_door_closed_tex               = r.load_dds_texture("assets/textures/door-closed.dds");
+        m_door_open_tex                 = r.load_dds_texture("assets/textures/door-open.dds");
+        
+        // Load multiple diamond textures
+        const std::vector<std::string> diamond_colors = { "green", "orange", "purple", "blue" };
+        for (const auto& color : diamond_colors)
+        {
+            if (auto tex = r.load_dds_texture("assets/textures/diamond-" + color + ".dds"))
+            {
+                m_diamond_textures.push_back(std::move(tex));
+            }
+        }
+        
+        m_bg_tex                        = r.load_dds_texture("assets/textures/background.dds");
+        m_fallback_tex                  = create_solid_color_texture(r, 32, 32, 255, 0, 0, 255);
+
+        const zwodee::texture* shovel_idle = m_player_shovel_tex ? m_player_shovel_tex.get() : m_fallback_tex.get();
+        const zwodee::texture* shovel_run = m_player_shovel_running_tex ? m_player_shovel_running_tex.get() : m_fallback_tex.get();
+        const zwodee::texture* pickaxe_idle = m_player_pickaxe_tex ? m_player_pickaxe_tex.get() : m_fallback_tex.get();
+        const zwodee::texture* pickaxe_run = m_player_pickaxe_running_tex ? m_player_pickaxe_running_tex.get() : m_fallback_tex.get();
         const zwodee::texture* stone_black_tex = m_stone_black_tex ? m_stone_black_tex.get() : m_fallback_tex.get();
         const zwodee::texture* stone_grey_tex = m_stone_grey_tex ? m_stone_grey_tex.get() : m_fallback_tex.get();
         const zwodee::texture* stone_brown_tex = m_stone_brown_tex ? m_stone_brown_tex.get() : m_fallback_tex.get();
         const zwodee::texture* pickaxe_tex = m_pickaxe_tex ? m_pickaxe_tex.get() : m_fallback_tex.get();
+        const zwodee::texture* coint_text = m_coin_tex ? m_coin_tex.get() : m_fallback_tex.get();
+        const zwodee::texture* door_closed = m_door_closed_tex ? m_door_closed_tex.get() : m_fallback_tex.get();
+        const zwodee::texture* door_open = m_door_open_tex ? m_door_open_tex.get() : m_fallback_tex.get();
         const zwodee::texture* fallback_tex_ptr = m_fallback_tex.get();
 
         if (m_bg_tex)
@@ -219,7 +280,7 @@ namespace digx
         }
 
         // Add player goblin
-        auto goblin = std::make_unique<player>(1, player_tex, pickaxe_player_tex);
+        auto goblin = std::make_unique<player>(1, shovel_idle, shovel_run, pickaxe_idle, pickaxe_run, &audio);
         goblin->set_grid_bounds(get_width(), get_height());
         goblin->set_level(this);
         goblin->set_grid_position(2, 2);
@@ -244,12 +305,20 @@ namespace digx
         p1->set_grid_position(3, 2);
         add_entity(std::move(p1));
 
-        auto coin1 = std::make_unique<gold_coin>(3, fallback_tex_ptr);
+        auto coin1 = std::make_unique<gold_coin>(3, coint_text);
         coin1->set_grid_position(8, 2);
         add_entity(std::move(coin1));
         m_target_gold = 1;
 
-        auto d1 = std::make_unique<diamond>(4, fallback_tex_ptr);
+        // Select random diamond texture
+        const zwodee::texture* chosen_diamond_tex = fallback_tex_ptr;
+        if (!m_diamond_textures.empty())
+        {
+            int rand_idx = std::rand() % m_diamond_textures.size();
+            chosen_diamond_tex = m_diamond_textures[rand_idx].get();
+        }
+
+        auto d1 = std::make_unique<diamond>(4, chosen_diamond_tex);
         d1->set_grid_position(9, 2);
         add_entity(std::move(d1));
 
@@ -282,9 +351,10 @@ namespace digx
         dr1->set_grid_position(4, 6);
         add_entity(std::move(dr1));
 
-        // Exit coordinate
-        m_exit_x = 400.0f;
-        m_exit_y = 400.0f;
+        // Add exit door
+        auto door = std::make_unique<exit_door>(15, door_closed, door_open);
+        door->set_grid_position(25, 6);
+        add_entity(std::move(door));
     }
 
     player* level::get_player() const

@@ -3,12 +3,32 @@
 #include <algorithm>
 #include <cmath>
 
+namespace
+{
+    void play_footstep(zwodee::audio_manager* audio)
+    {
+        if (audio)
+        {
+            int rand_idx = (std::rand() % 8) + 1;
+            audio->play_sound("running_" + std::to_string(rand_idx));
+        }
+    }
+}
+
 namespace digx
 {
-    player::player(uint32_t network_id, const zwodee::texture* shovel_tex, const zwodee::texture* pickaxe_tex)
-        : zwodee::entity_player(network_id, shovel_tex, 100),
-          m_shovel_tex(shovel_tex),
-          m_pickaxe_tex(pickaxe_tex)
+    player::player(uint32_t network_id, 
+                   const zwodee::texture* shovel_idle_tex, 
+                   const zwodee::texture* shovel_running_tex, 
+                   const zwodee::texture* pickaxe_idle_tex, 
+                   const zwodee::texture* pickaxe_running_tex, 
+                   zwodee::audio_manager* audio)
+        : zwodee::entity_player(network_id, shovel_idle_tex, 100),
+          m_shovel_idle_tex(shovel_idle_tex),
+          m_shovel_running_tex(shovel_running_tex),
+          m_pickaxe_idle_tex(pickaxe_idle_tex),
+          m_pickaxe_running_tex(pickaxe_running_tex),
+          m_audio(audio)
     {
         set_speed(m_tunnel_speed);
         configure_animator(1, 1, true);
@@ -131,71 +151,49 @@ namespace digx
             bool cancel_tap = false;
             if (pressed & zwodee::input_state::action_1) cancel_tap = true;
             if (pressed & zwodee::input_state::action_2) cancel_tap = true;
-            if ((pressed & zwodee::input_state::move_left) && m_dir_x != -1.0f) cancel_tap = true;
-            if ((pressed & zwodee::input_state::move_right) && m_dir_x != 1.0f) cancel_tap = true;
-            if ((pressed & zwodee::input_state::move_up) && m_dir_y != -1.0f) cancel_tap = true;
-            if ((pressed & zwodee::input_state::move_down) && m_dir_y != 1.0f) cancel_tap = true;
 
-            if (cancel_tap)
-            {
-                // Snap target coordinates to the immediate next grid boundary, canceling any further taps
-                if (m_dir_x > 0.0f) m_target_x = std::floor(m_x / 32.0f + 1.0f) * 32.0f;
-                else if (m_dir_x < 0.0f) m_target_x = std::floor(m_x / 32.0f) * 32.0f;
-
-                if (m_dir_y > 0.0f) m_target_y = std::floor(m_y / 32.0f + 1.0f) * 32.0f;
-                else if (m_dir_y < 0.0f) m_target_y = std::floor(m_y / 32.0f) * 32.0f;
-
-                m_has_queued_move = false;
-                pressed = 0; // Clear pressed mask so the canceling input is not processed or queued
-            }
-
+            // Increment queued steps if pressing in same direction
             if (pressed & zwodee::input_state::move_left)
             {
-                if (m_dir_x == -1.0f)
-                {
-                    float next = m_target_x - 32.0f;
-                    if (!is_tile_blocked(next, m_target_y)) m_target_x = next;
-                }
-                else
-                {
-                    m_queued_dir_x = -1.0f; m_queued_dir_y = 0.0f; m_has_queued_move = true;
-                }
+                if (m_dir_x == -1.0f) m_queued_steps++;
+                else cancel_tap = true;
             }
             if (pressed & zwodee::input_state::move_right)
             {
-                if (m_dir_x == 1.0f)
-                {
-                    float next = m_target_x + 32.0f;
-                    if (!is_tile_blocked(next, m_target_y)) m_target_x = next;
-                }
-                else
-                {
-                    m_queued_dir_x = 1.0f; m_queued_dir_y = 0.0f; m_has_queued_move = true;
-                }
+                if (m_dir_x == 1.0f) m_queued_steps++;
+                else cancel_tap = true;
             }
             if (pressed & zwodee::input_state::move_up)
             {
-                if (m_dir_y == -1.0f)
-                {
-                    float next = m_target_y - 32.0f;
-                    if (!is_tile_blocked(m_target_x, next)) m_target_y = next;
-                }
-                else
-                {
-                    m_queued_dir_x = 0.0f; m_queued_dir_y = -1.0f; m_has_queued_move = true;
-                }
+                if (m_dir_y == -1.0f) m_queued_steps++;
+                else cancel_tap = true;
             }
             if (pressed & zwodee::input_state::move_down)
             {
-                if (m_dir_y == 1.0f)
-                {
-                    float next = m_target_y + 32.0f;
-                    if (!is_tile_blocked(m_target_x, next)) m_target_y = next;
+                if (m_dir_y == 1.0f) m_queued_steps++;
+                else cancel_tap = true;
+            }
+
+            if (cancel_tap)
+            {
+                m_queued_steps = 0;
+                m_has_queued_move = false;
+
+                // If turning, queue the new direction
+                if ((pressed & zwodee::input_state::move_left) && m_dir_x == 0.0f) {
+                    m_queued_dir_x = -1.0f; m_queued_dir_y = 0.0f; m_has_queued_move = true;
                 }
-                else
-                {
+                else if ((pressed & zwodee::input_state::move_right) && m_dir_x == 0.0f) {
+                    m_queued_dir_x = 1.0f; m_queued_dir_y = 0.0f; m_has_queued_move = true;
+                }
+                else if ((pressed & zwodee::input_state::move_up) && m_dir_y == 0.0f) {
+                    m_queued_dir_x = 0.0f; m_queued_dir_y = -1.0f; m_has_queued_move = true;
+                }
+                else if ((pressed & zwodee::input_state::move_down) && m_dir_y == 0.0f) {
                     m_queued_dir_x = 0.0f; m_queued_dir_y = 1.0f; m_has_queued_move = true;
                 }
+
+                pressed = 0; // Clear pressed mask so the canceling input is not processed
             }
         }
 
@@ -225,8 +223,28 @@ namespace digx
                 m_vy = 0.0f;
                 m_is_moving = false;
 
-                // Process queued movement immediately upon reaching target cell
-                if (m_has_queued_move)
+                // Process queued steps first
+                if (m_queued_steps > 0)
+                {
+                    float next_target_x = m_x + m_dir_x * 32.0f;
+                    float next_target_y = m_y + m_dir_y * 32.0f;
+
+                    if (!is_tile_blocked(next_target_x, next_target_y))
+                    {
+                        m_target_x = next_target_x;
+                        m_target_y = next_target_y;
+                        m_is_moving = true;
+                        m_queued_steps--;
+                        play_footstep(m_audio);
+                    }
+                    else
+                    {
+                        m_queued_steps = 0; // Blocked, clear the queue
+                    }
+                }
+
+                // Process queued turn/new direction movement if we stopped
+                if (!m_is_moving && m_has_queued_move)
                 {
                     float next_target_x = m_x + m_queued_dir_x * 32.0f;
                     float next_target_y = m_y + m_queued_dir_y * 32.0f;
@@ -238,6 +256,7 @@ namespace digx
                         m_dir_x = m_queued_dir_x;
                         m_dir_y = m_queued_dir_y;
                         m_is_moving = true;
+                        play_footstep(m_audio);
                     }
                     m_has_queued_move = false;
                 }
@@ -246,6 +265,8 @@ namespace digx
 
         if (!m_is_moving)
         {
+            m_queued_steps = 0; // Reset queued steps if stopped
+
             float dir_x = 0.0f;
             float dir_y = 0.0f;
 
@@ -272,12 +293,38 @@ namespace digx
                     m_dir_x = dir_x;
                     m_dir_y = dir_y;
                     m_is_moving = true;
+                    play_footstep(m_audio);
                 }
             }
         }
 
         // Advance animation frame (skipping double-velocity-adding zwodee::entity::tick)
         m_animator.update(1);
+
+        // Update direction and active texture
+        if (m_dir_x < 0.0f)
+        {
+            m_facing_left = true;
+        }
+        else if (m_dir_x > 0.0f)
+        {
+            m_facing_left = false;
+        }
+        set_flip_horizontal(m_facing_left);
+
+        const zwodee::texture* target_tex = nullptr;
+        if (m_has_pickaxe)
+        {
+            target_tex = m_is_moving ? m_pickaxe_running_tex : m_pickaxe_idle_tex;
+        }
+        else
+        {
+            target_tex = m_is_moving ? m_shovel_running_tex : m_shovel_idle_tex;
+        }
+        if (target_tex)
+        {
+            set_texture(target_tex);
+        }
     }
 
     void player::set_digging(bool is_digging)
@@ -317,10 +364,6 @@ namespace digx
     void player::obtain_pickaxe()
     {
         m_has_pickaxe = true;
-        if (m_pickaxe_tex)
-        {
-            set_texture(m_pickaxe_tex);
-        }
     }
 
     int player::get_gold_count() const
@@ -373,11 +416,7 @@ namespace digx
         m_vy = 0.0f;
         m_is_moving = false;
         m_initialized_grid = true;
-        
-        if (m_shovel_tex)
-        {
-            set_texture(m_shovel_tex);
-        }
+        m_has_pickaxe = false;
     }
 
     void player::set_grid_bounds(int cols, int rows)
@@ -389,6 +428,11 @@ namespace digx
     void player::set_level(zwodee::tile_level* lvl)
     {
         m_level = lvl;
+    }
+    
+    zwodee::audio_manager* player::get_audio_manager() const
+    {
+        return m_audio;
     }
 
     bool player::is_tile_blocked(float tx, float ty) const

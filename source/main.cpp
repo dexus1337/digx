@@ -15,7 +15,7 @@ int main(int argc, char* argv[])
 
     // Create level (25x19 grid spans the 800x600 screen space)
     auto level = std::make_unique<digx::level>(35, 35);
-    level->load_demo_level(engine.get_renderer());
+    level->load_demo_level(engine);
 
     // Register level to level manager and transition to it
     engine.get_level_manager().register_level("demo", std::move(level));

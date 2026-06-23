@@ -15,7 +15,12 @@ namespace digx
     class player : public zwodee::entity_player
     {
     public:
-        player(uint32_t network_id, const zwodee::texture* shovel_tex, const zwodee::texture* pickaxe_tex);
+        player(uint32_t network_id, 
+               const zwodee::texture* shovel_idle_tex, 
+               const zwodee::texture* shovel_running_tex, 
+               const zwodee::texture* pickaxe_idle_tex, 
+               const zwodee::texture* pickaxe_running_tex, 
+               zwodee::audio_manager* audio);
 
         void tick() override;
 
@@ -40,6 +45,7 @@ namespace digx
 
         void set_grid_bounds(int cols, int rows);
         void set_level(zwodee::tile_level* lvl);
+        [[nodiscard]] zwodee::audio_manager* get_audio_manager() const;
 
     private:
         zwodee::tile_level* m_level = nullptr;
@@ -51,8 +57,8 @@ namespace digx
         int m_score = 0;
 
         float m_tunnel_speed = 1.0f;
-        float m_shovel_speed = 1.0f;
-        float m_pickaxe_speed = 2.0f;
+        float m_shovel_speed = 0.5f;
+        float m_pickaxe_speed = 0.75f;
 
         int m_fart_cooldown = 0;
         int m_breath_cooldown = 0;
@@ -84,8 +90,13 @@ namespace digx
         float m_queued_dir_x = 0.0f;
         float m_queued_dir_y = 0.0f;
         bool m_has_queued_move = false;
+        int m_queued_steps = 0;
 
-        const zwodee::texture* m_shovel_tex = nullptr;
-        const zwodee::texture* m_pickaxe_tex = nullptr;
+        const zwodee::texture* m_shovel_idle_tex = nullptr;
+        const zwodee::texture* m_shovel_running_tex = nullptr;
+        const zwodee::texture* m_pickaxe_idle_tex = nullptr;
+        const zwodee::texture* m_pickaxe_running_tex = nullptr;
+        zwodee::audio_manager* m_audio = nullptr;
+        bool m_facing_left = false;
     };
 }
