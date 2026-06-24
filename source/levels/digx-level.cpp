@@ -55,6 +55,12 @@ namespace digx
             return;
         }
 
+        if (m_player->is_dead())
+        {
+            restart();
+            return;
+        }
+
         // Dig the tile the player is currently standing on
         float px = m_player->get_x();
         float py = m_player->get_y();
@@ -104,7 +110,8 @@ namespace digx
             float dy = py - m_exit_y;
             if (std::sqrt(dx * dx + dy * dy) < 24.0f)
             {
-                // Exit reached!
+                restart();
+                return;
             }
         }
 
@@ -147,12 +154,116 @@ namespace digx
                 else if (auto* dl = dynamic_cast<lamp*>(ent.get()))
                 {
                     dl->take_damage(999);
-                    m_lamp_timer = 10.0f; // 10 seconds reveal
-                    for (const auto& other : get_entities())
+
+                    diamond* revealed_diamond = nullptr;
+
+                    // 1. Check if the lamp has a specific target diamond
+                    if (auto* target = dl->get_target_diamond())
                     {
-                        if (auto* other_d = dynamic_cast<diamond*>(other.get()))
+                        if (!target->is_dead() && !target->is_permanently_revealed())
                         {
-                            other_d->set_revealed(true);
+                            int gx = static_cast<int>(std::round(target->get_x() / 32.0f));
+                            int gy = static_cast<int>(std::round(target->get_y() / 32.0f));
+                            if (!is_tile_digged(gx, gy))
+                            {
+                                revealed_diamond = target;
+                            }
+                        }
+                    }
+
+                    // 2. Fallback to visible or nearest diamond
+                    if (!revealed_diamond)
+                    {
+                        float camera_x = 0.0f;
+                        float camera_y = 0.0f;
+                        float win_w = 1280.0f;
+                        float win_h = 720.0f;
+                        if (m_engine)
+                        {
+                            win_w = static_cast<float>(m_engine->get_window().get_width());
+                            win_h = static_cast<float>(m_engine->get_window().get_height());
+                        }
+
+                        float px = m_player ? m_player->get_x() : 0.0f;
+                        float py = m_player ? m_player->get_y() : 0.0f;
+
+                        // Horizontal page flipping camera logic matching get_render_snapshot
+                        int page_x = static_cast<int>(std::floor(px / win_w));
+                        int max_page_x = static_cast<int>(std::max(0.0f, std::floor((get_width() * 32.0f - 1.0f) / win_w)));
+                        if (page_x < 0) page_x = 0;
+                        if (page_x > max_page_x) page_x = max_page_x;
+                        camera_x = page_x * win_w;
+
+                        // Vertical smooth centering camera logic matching get_render_snapshot
+                        float half_height = win_h / 2.0f;
+                        camera_y = py - half_height;
+                        float max_camera_y = static_cast<float>(get_height() * 32) - win_h;
+                        if (max_camera_y < 0.0f) max_camera_y = 0.0f;
+                        if (camera_y < 0.0f) camera_y = 0.0f;
+                        if (camera_y > max_camera_y) camera_y = max_camera_y;
+
+                        std::vector<diamond*> visible_diamonds;
+                        std::vector<diamond*> all_non_digged_diamonds;
+
+                        for (const auto& other : get_entities())
+                        {
+                            if (auto* d = dynamic_cast<diamond*>(other.get()))
+                            {
+                                if (!d->is_dead() && !d->is_permanently_revealed())
+                                {
+                                    int gx = static_cast<int>(std::round(d->get_x() / 32.0f));
+                                    int gy = static_cast<int>(std::round(d->get_y() / 32.0f));
+                                    if (!is_tile_digged(gx, gy))
+                                    {
+                                        all_non_digged_diamonds.push_back(d);
+
+                                        float dx = d->get_x();
+                                        float dy = d->get_y();
+                                        if (dx >= camera_x && dx <= camera_x + win_w &&
+                                            dy >= camera_y && dy <= camera_y + win_h)
+                                        {
+                                            visible_diamonds.push_back(d);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!visible_diamonds.empty())
+                        {
+                            int rand_idx = std::rand() % visible_diamonds.size();
+                            revealed_diamond = visible_diamonds[rand_idx];
+                        }
+                        else if (!all_non_digged_diamonds.empty() && m_player)
+                        {
+                            // Find the nearest one to the player
+                            diamond* nearest = nullptr;
+                            float min_dist_sq = -1.0f;
+                            for (auto* d : all_non_digged_diamonds)
+                            {
+                                float diff_x = d->get_x() - px;
+                                float diff_y = d->get_y() - py;
+                                float dist_sq = diff_x * diff_x + diff_y * diff_y;
+                                if (min_dist_sq < 0.0f || dist_sq < min_dist_sq)
+                                {
+                                    min_dist_sq = dist_sq;
+                                    nearest = d;
+                                }
+                            }
+                            revealed_diamond = nearest;
+                        }
+                    }
+
+                    if (revealed_diamond)
+                    {
+                        revealed_diamond->set_permanently_revealed(true);
+                    }
+
+                    if (m_player)
+                    {
+                        if (auto* audio = m_player->get_audio_manager())
+                        {
+                            audio->play_sound("appear");
                         }
                     }
                 }
@@ -232,6 +343,44 @@ namespace digx
                     continue;
                 }
 
+                // Check collision with other entities while moving
+                if (st->is_moving())
+                {
+                    for (const auto& other : get_entities())
+                    {
+                        if (other.get() == st || other->is_dead())
+                        {
+                            continue;
+                        }
+
+                        if (st->collides_with(*other))
+                        {
+                            if (other.get() == m_player)
+                            {
+                                if (st->is_falling())
+                                {
+                                    m_player->take_damage(999);
+                                }
+                            }
+                            else
+                            {
+                                bool is_killable = !dynamic_cast<stone*>(other.get()) &&
+                                                   !dynamic_cast<gold_coin*>(other.get()) &&
+                                                   !dynamic_cast<diamond*>(other.get()) &&
+                                                   !dynamic_cast<lamp*>(other.get()) &&
+                                                   !dynamic_cast<garlic_bulb*>(other.get()) &&
+                                                   !dynamic_cast<onion_bulb*>(other.get()) &&
+                                                   !dynamic_cast<pickaxe*>(other.get()) &&
+                                                   !dynamic_cast<exit_door*>(other.get());
+                                if (is_killable)
+                                {
+                                    other->take_damage(999);
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // If not currently moving, wiggling, or falling, check if it should start wiggling
                 if (!st->is_moving() && !st->is_falling() && st->get_wiggle_ticks() == 0)
                 {
@@ -248,7 +397,7 @@ namespace digx
                     {
                         if (other.get() != st && !other->is_dead())
                         {
-                            if (dynamic_cast<stone*>(other.get()) || dynamic_cast<player*>(other.get()))
+                            if (dynamic_cast<stone*>(other.get()))
                             {
                                 int ogx = static_cast<int>(std::round(other->get_x() / 32.0f));
                                 int ogy = static_cast<int>(std::round(other->get_y() / 32.0f));
@@ -307,16 +456,7 @@ namespace digx
                                     break;
                                 }
                             }
-                            else if (dynamic_cast<player*>(other.get()))
-                            {
-                                int ogx = static_cast<int>(std::round(other->get_x() / 32.0f));
-                                int ogy = static_cast<int>(std::round(other->get_y() / 32.0f));
-                                if (ogx == below_gx && ogy == below_gy)
-                                {
-                                    blocked_below = true;
-                                    break;
-                                }
-                            }
+
                         }
                     }
 
@@ -365,7 +505,50 @@ namespace digx
 
     void level::render(zwodee::renderer& target_renderer, double alpha)
     {
-        zwodee::tile_level::render(target_renderer, alpha);
+        // Render background if any
+        if (get_background_texture())
+        {
+            float lvl_w = static_cast<float>(get_width() * 32);
+            float lvl_h = static_cast<float>(get_height() * 32);
+            int tex_w = get_background_texture()->get_width();
+            int tex_h = get_background_texture()->get_height();
+
+            target_renderer.draw_sprite(*get_background_texture(), 0, 0, tex_w, tex_h, 0.0f, 0.0f, lvl_w, lvl_h);
+        }
+
+        // Render static tiles
+        const auto& tiles = get_static_objects();
+        for (const auto& tile : tiles)
+        {
+            if (!tile)
+            {
+                continue;
+            }
+
+            const zwodee::texture* tex = tile->get_texture();
+            bool is_rock = (tex == m_static_stone_textures[0].get() ||
+                            tex == m_static_stone_textures[1].get() ||
+                            tex == m_static_stone_textures[2].get() ||
+                            tex == m_static_stone_textures[3].get());
+
+            if (is_rock && m_dirt_tex)
+            {
+                target_renderer.draw_sprite(*m_dirt_tex, 0, 0, m_dirt_tex->get_width(), m_dirt_tex->get_height(), tile->get_x(), tile->get_y(), tile->get_width(), tile->get_height());
+            }
+
+            tile->render(target_renderer, alpha);
+        }
+
+        // Render dynamic entities
+        for (const auto& ent : get_entities())
+        {
+            if (ent->is_dead())
+            {
+                continue;
+            }
+
+            ent->render(target_renderer, alpha);
+        }
     }
 
     namespace
@@ -408,6 +591,8 @@ namespace digx
             std::vector<std::shared_ptr<zwodee::texture>> diamond_textures;
             std::shared_ptr<zwodee::texture> garlic_tex;
             std::shared_ptr<zwodee::texture> onion_tex;
+            std::shared_ptr<zwodee::texture> lamp_tex;
+            std::shared_ptr<zwodee::texture> blink_tex;
             std::shared_ptr<zwodee::texture> digged_tex;
             std::array<std::shared_ptr<zwodee::texture>, 4> static_stone_textures;
             std::shared_ptr<zwodee::texture> bg_tex;
@@ -416,7 +601,8 @@ namespace digx
             std::shared_ptr<zwodee::texture> vampire_tex;
             std::shared_ptr<zwodee::texture> soldier_tex;
             std::shared_ptr<zwodee::texture> mummy_tex;
-            std::shared_ptr<zwodee::texture> dragon_tex;
+            std::shared_ptr<zwodee::texture> dragon_red_tex;
+            std::shared_ptr<zwodee::texture> dragon_green_tex;
             std::shared_ptr<zwodee::texture> dirt_tex;
  
             bool loaded = false;
@@ -442,6 +628,8 @@ namespace digx
                 door_open_tex                 = r.load_dds_texture("assets/textures/door-open.dds");
                 garlic_tex                    = r.load_dds_texture("assets/textures/garlic.dds");
                 onion_tex                     = r.load_dds_texture("assets/textures/onion.dds");
+                lamp_tex                      = r.load_dds_texture("assets/textures/lamp.dds");
+                blink_tex                     = r.load_dds_texture("assets/textures/blink.dds");
                 digged_tex                    = r.load_dds_texture("assets/textures/digged.dds");
                  
                 static_stone_textures[0]      = r.load_dds_texture("assets/textures/stone-1.dds");
@@ -464,7 +652,8 @@ namespace digx
                 vampire_tex                   = r.load_dds_texture("assets/textures/vampire.dds");
                 soldier_tex                   = r.load_dds_texture("assets/textures/soldier.dds");
                 mummy_tex                     = r.load_dds_texture("assets/textures/mummy.dds");
-                dragon_tex                    = r.load_dds_texture("assets/textures/dragon.dds");
+                dragon_red_tex                = r.load_dds_texture("assets/textures/dragon-red.dds");
+                dragon_green_tex              = r.load_dds_texture("assets/textures/dragon-green.dds");
                 dirt_tex                      = r.load_dds_texture("assets/textures/dirt.dds");
  
                 loaded = true;
@@ -476,6 +665,7 @@ namespace digx
 
     void level::load_demo_level(zwodee::engine& engine)
     {
+        m_engine = &engine;
         auto& r = engine.get_renderer();
         auto& audio = engine.get_audio_manager();
 
@@ -493,6 +683,7 @@ namespace digx
         audio.load_sound("stone_move", "assets/sounds/stone-move.wav");
         audio.load_sound("explosion", "assets/sounds/explosion.wav");
         audio.load_sound("stone_impact", "assets/sounds/stone-impact.wav");
+        audio.load_sound("appear", "assets/sounds/appear.wav");
 
         // Load digging sounds
         for (int i = 1; i <= 4; ++i)
@@ -521,6 +712,8 @@ namespace digx
         m_door_open_tex                 = g_textures.door_open_tex;
         m_garlic_tex                    = g_textures.garlic_tex;
         m_onion_tex                     = g_textures.onion_tex;
+        m_lamp_tex                      = g_textures.lamp_tex;
+        m_blink_tex                     = g_textures.blink_tex;
         m_digged_tex                    = g_textures.digged_tex;
         
         m_static_stone_textures[0]      = g_textures.static_stone_textures[0];
@@ -536,33 +729,34 @@ namespace digx
         m_vampire_tex                   = g_textures.vampire_tex;
         m_soldier_tex                   = g_textures.soldier_tex;
         m_mummy_tex                     = g_textures.mummy_tex;
-        m_dragon_tex                    = g_textures.dragon_tex;
+        m_dragon_red_tex                = g_textures.dragon_red_tex;
+        m_dragon_green_tex              = g_textures.dragon_green_tex;
         m_dirt_tex                      = g_textures.dirt_tex;
 
-        const zwodee::texture* shovel_idle = m_player_shovel_tex ? m_player_shovel_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* shovel_run = m_player_shovel_running_tex ? m_player_shovel_running_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* shovel_run_up = m_player_shovel_running_up_tex ? m_player_shovel_running_up_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* shovel_run_down = m_player_shovel_running_down_tex ? m_player_shovel_running_down_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* pickaxe_idle = m_player_pickaxe_tex ? m_player_pickaxe_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* pickaxe_run = m_player_pickaxe_running_tex ? m_player_pickaxe_running_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* pickaxe_run_up = m_player_pickaxe_running_up_tex ? m_player_pickaxe_running_up_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* pickaxe_run_down = m_player_pickaxe_running_down_tex ? m_player_pickaxe_running_down_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* stone_black_tex = m_stone_black_tex ? m_stone_black_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* stone_grey_tex = m_stone_grey_tex ? m_stone_grey_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* stone_brown_tex = m_stone_brown_tex ? m_stone_brown_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* pickaxe_tex = m_pickaxe_tex ? m_pickaxe_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* coint_text = m_coin_tex ? m_coin_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* door_closed = m_door_closed_tex ? m_door_closed_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* door_open = m_door_open_tex ? m_door_open_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* garlic_tex = m_garlic_tex ? m_garlic_tex.get() : m_fallback_tex.get();
-        const zwodee::texture* onion_tex = m_onion_tex ? m_onion_tex.get() : m_fallback_tex.get();
         const zwodee::texture* fallback_tex_ptr = m_fallback_tex.get();
+        const zwodee::texture* shovel_idle = m_player_shovel_tex ? m_player_shovel_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* shovel_run = m_player_shovel_running_tex ? m_player_shovel_running_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* shovel_run_up = m_player_shovel_running_up_tex ? m_player_shovel_running_up_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* shovel_run_down = m_player_shovel_running_down_tex ? m_player_shovel_running_down_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* pickaxe_idle = m_player_pickaxe_tex ? m_player_pickaxe_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* pickaxe_run = m_player_pickaxe_running_tex ? m_player_pickaxe_running_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* pickaxe_run_up = m_player_pickaxe_running_up_tex ? m_player_pickaxe_running_up_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* pickaxe_run_down = m_player_pickaxe_running_down_tex ? m_player_pickaxe_running_down_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* stone_black_tex = m_stone_black_tex ? m_stone_black_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* stone_grey_tex = m_stone_grey_tex ? m_stone_grey_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* stone_brown_tex = m_stone_brown_tex ? m_stone_brown_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* pickaxe_tex = m_pickaxe_tex ? m_pickaxe_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* coint_text = m_coin_tex ? m_coin_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* door_closed = m_door_closed_tex ? m_door_closed_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* door_open = m_door_open_tex ? m_door_open_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* garlic_tex = m_garlic_tex ? m_garlic_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* onion_tex = m_onion_tex ? m_onion_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* lamp_tex = m_lamp_tex ? m_lamp_tex.get() : fallback_tex_ptr;
 
         // Remove full stretched background texture
         set_background_texture(nullptr);
 
         // Populate the entire grid with header, footer, and dirt tiles
-        const zwodee::texture* bg_tex_ptr = m_bg_tex ? m_bg_tex.get() : fallback_tex_ptr;
         const zwodee::texture* dirt_tex_ptr = m_dirt_tex ? m_dirt_tex.get() : fallback_tex_ptr;
 
         for (uint32_t y = 0; y < get_height(); ++y)
@@ -788,9 +982,11 @@ namespace digx
             {15, 31}
         };
         uint32_t diamond_net_id = 400;
+        const zwodee::texture* blink_tex_ptr = m_blink_tex ? m_blink_tex.get() : fallback_tex_ptr;
         for (const auto& pos : diamond_positions)
         {
-            auto d = std::make_unique<diamond>(diamond_net_id++, get_random_diamond_texture());
+            auto d = std::make_unique<diamond>(diamond_net_id++, get_random_diamond_texture(), blink_tex_ptr);
+            d->set_level(this);
             d->set_grid_position(pos.first, pos.second);
             add_entity(std::move(d));
         }
@@ -826,7 +1022,7 @@ namespace digx
         uint32_t lamp_net_id = 700;
         for (const auto& pos : lamp_positions)
         {
-            auto l = std::make_unique<lamp>(lamp_net_id++, fallback_tex_ptr);
+            auto l = std::make_unique<lamp>(lamp_net_id++, lamp_tex);
             l->set_grid_position(pos.first, pos.second);
             add_entity(std::move(l));
         }
@@ -859,20 +1055,64 @@ namespace digx
         m1->set_grid_position(5, 20);
         add_entity(std::move(m1));
 
-        // Dragon patrol path (horizontal corridor)
+        // Dragon 1 patrol path (horizontal corridor)
         for (int y = 20; y <= 21; ++y)
             for (int x = 11; x <= 30; ++x)
                 dig_tile_at(x, y);
-        const zwodee::texture* dragon_tex_ptr = m_dragon_tex ? m_dragon_tex.get() : fallback_tex_ptr;
-        auto dr1 = std::make_unique<dragon>(12, dragon_tex_ptr);
+        auto get_random_dragon_tex = [this, fallback_tex_ptr]() -> const zwodee::texture* {
+            if (std::rand() % 2 == 0)
+            {
+                return m_dragon_red_tex ? m_dragon_red_tex.get() : fallback_tex_ptr;
+            }
+            else
+            {
+                return m_dragon_green_tex ? m_dragon_green_tex.get() : fallback_tex_ptr;
+            }
+        };
+
+        auto dr1 = std::make_unique<dragon>(12, get_random_dragon_tex());
         dr1->set_grid_position(12, 20);
         add_entity(std::move(dr1));
+
+        // Dragon 2 patrol path (horizontal corridor)
+        for (int y = 24; y <= 25; ++y)
+            for (int x = 11; x <= 30; ++x)
+                dig_tile_at(x, y);
+        auto dr2 = std::make_unique<dragon>(112, get_random_dragon_tex());
+        dr2->set_grid_position(15, 24);
+        add_entity(std::move(dr2));
+
+        // Dragon 3 patrol path (horizontal corridor)
+        for (int y = 28; y <= 29; ++y)
+            for (int x = 11; x <= 30; ++x)
+                dig_tile_at(x, y);
+        auto dr3 = std::make_unique<dragon>(113, get_random_dragon_tex());
+        dr3->set_grid_position(18, 28);
+        add_entity(std::move(dr3));
 
         // Add exit door at bottom right
         dig_tile_at(32, 32);
         auto door = std::make_unique<exit_door>(15, door_closed, door_open);
         door->set_grid_position(32, 32);
+        m_exit_x = 32.0f * 32.0f;
+        m_exit_y = 32.0f * 32.0f;
         add_entity(std::move(door));
+    }
+
+    void level::restart()
+    {
+        if (!m_engine) return;
+
+        m_player = nullptr;
+        m_exit_open = false;
+        m_exit_x = 0.0f;
+        m_exit_y = 0.0f;
+        m_lamp_timer = 0.0f;
+        m_target_gold = 0;
+        m_current_darkness = 1.0f;
+
+        clear_level();
+        load_demo_level(*m_engine);
     }
 
     player* level::get_player() const
@@ -1003,7 +1243,35 @@ namespace digx
 
     zwodee::render_snapshot level::get_render_snapshot(int display_w, int display_h) const
     {
-        zwodee::render_snapshot snapshot = zwodee::tile_level::get_render_snapshot(display_w, display_h);
+        zwodee::render_snapshot base_snapshot = zwodee::tile_level::get_render_snapshot(display_w, display_h);
+        zwodee::render_snapshot snapshot;
+        snapshot.reserve(base_snapshot.size() * 2);
+
+        for (const auto& node : base_snapshot)
+        {
+            bool is_rock = (node.tex && (node.tex == m_static_stone_textures[0].get() ||
+                                         node.tex == m_static_stone_textures[1].get() ||
+                                         node.tex == m_static_stone_textures[2].get() ||
+                                         node.tex == m_static_stone_textures[3].get()));
+            if (is_rock && m_dirt_tex)
+            {
+                zwodee::render_node dirt_node;
+                dirt_node.x = node.x;
+                dirt_node.y = node.y;
+                dirt_node.w = node.w;
+                dirt_node.h = node.h;
+                dirt_node.tex = m_dirt_tex.get();
+                dirt_node.src_x = 0;
+                dirt_node.src_y = 0;
+                dirt_node.src_w = m_dirt_tex->get_width();
+                dirt_node.src_h = m_dirt_tex->get_height();
+                dirt_node.flip_horizontal = false;
+                dirt_node.flip_vertical = true; // Use flip_vertical to mark dirt under rock
+                dirt_node.color_mod = 255;
+                snapshot.push_back(dirt_node);
+            }
+            snapshot.push_back(node);
+        }
 
         if (m_player)
         {
@@ -1088,19 +1356,20 @@ namespace digx
 
             // Layer sorting to render the door above digged tiles but beneath the player
             std::stable_sort(snapshot.begin(), snapshot.end(), [this](const zwodee::render_node& a, const zwodee::render_node& b) {
-                auto get_layer = [this](const zwodee::texture* tex) {
-                    if (!tex) return 3;
-                    if (tex == m_bg_tex.get()) return 0;
-                    if (tex == m_digged_tex.get() || 
-                        tex == m_static_stone_textures[0].get() || tex == m_static_stone_textures[1].get() ||
-                        tex == m_static_stone_textures[2].get() || tex == m_static_stone_textures[3].get())
+                auto get_layer = [this](const zwodee::render_node& node) {
+                    if (!node.tex) return 3;
+                    if (node.tex == m_bg_tex.get()) return 0;
+                    if (node.tex == m_digged_tex.get() || 
+                        node.tex == m_static_stone_textures[0].get() || node.tex == m_static_stone_textures[1].get() ||
+                        node.tex == m_static_stone_textures[2].get() || node.tex == m_static_stone_textures[3].get() ||
+                        (node.tex == m_dirt_tex.get() && node.flip_vertical))
                     {
                         return 1;
                     }
-                    if (tex == m_door_closed_tex.get() || tex == m_door_open_tex.get()) return 2;
+                    if (node.tex == m_door_closed_tex.get() || node.tex == m_door_open_tex.get()) return 2;
                     return 3;
                 };
-                return get_layer(a.tex) < get_layer(b.tex);
+                return get_layer(a) < get_layer(b);
             });
         }
 

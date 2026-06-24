@@ -86,8 +86,11 @@ endif()
 # Create a custom copy target that is ALWAYS marked out-of-date
 add_custom_target(copy_assets ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_CURRENT_SOURCE_DIR}/assets"
-        "${OUTPUT_ASSETS_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/textures"
+        "${OUTPUT_ASSETS_DIR}/textures"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/sounds"
+        "${OUTPUT_ASSETS_DIR}/sounds"
     COMMENT "Syncing assets to output directory..."
 )
 

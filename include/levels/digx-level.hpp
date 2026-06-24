@@ -28,6 +28,7 @@ namespace digx
         zwodee::render_snapshot get_render_snapshot(int display_w, int display_h) const override;
 
         void load_demo_level(zwodee::engine& engine);
+        void restart();
 
         [[nodiscard]] player* get_player() const;
 
@@ -60,6 +61,8 @@ namespace digx
         std::vector<std::shared_ptr<zwodee::texture>> m_diamond_textures;
         std::shared_ptr<zwodee::texture> m_garlic_tex;
         std::shared_ptr<zwodee::texture> m_onion_tex;
+        std::shared_ptr<zwodee::texture> m_lamp_tex;
+        std::shared_ptr<zwodee::texture> m_blink_tex;
         std::shared_ptr<zwodee::texture> m_digged_tex;
         std::array<std::shared_ptr<zwodee::texture>, 4> m_static_stone_textures;
         std::shared_ptr<zwodee::texture> m_bg_tex;
@@ -69,7 +72,8 @@ namespace digx
         std::shared_ptr<zwodee::texture> m_vampire_tex;
         std::shared_ptr<zwodee::texture> m_soldier_tex;
         std::shared_ptr<zwodee::texture> m_mummy_tex;
-        std::shared_ptr<zwodee::texture> m_dragon_tex;
+        std::shared_ptr<zwodee::texture> m_dragon_red_tex;
+        std::shared_ptr<zwodee::texture> m_dragon_green_tex;
         std::shared_ptr<zwodee::texture> m_dirt_tex;
 
         // Target number of gold coins to collect to open the exit
@@ -86,5 +90,6 @@ namespace digx
         int m_level_number = 1;
         float m_current_darkness = 1.0f;
         float m_target_darkness = 1.0f;
+        zwodee::engine* m_engine = nullptr;
     };
 }

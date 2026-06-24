@@ -18,5 +18,11 @@ namespace digx
         lamp(uint32_t network_id, const zwodee::texture* tex);
 
         void tick() override;
+
+        void set_target_diamond(class diamond* target);
+        [[nodiscard]] class diamond* get_target_diamond() const;
+
+    private:
+        class diamond* m_target_diamond = nullptr;
     };
 }

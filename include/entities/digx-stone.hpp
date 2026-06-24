@@ -48,7 +48,7 @@ namespace digx
     private:
         stone_color m_color = color_black;
         bool m_is_falling = false;
-        float m_fall_speed = 4.0f;
+        float m_fall_speed = 2.0f;
 
         bool m_is_moving = false;
         bool m_was_pushed = false;

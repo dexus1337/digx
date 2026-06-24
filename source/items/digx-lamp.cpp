@@ -12,4 +12,14 @@ namespace digx
     void lamp::tick()
     {
     }
+
+    void lamp::set_target_diamond(diamond* target)
+    {
+        m_target_diamond = target;
+    }
+
+    diamond* lamp::get_target_diamond() const
+    {
+        return m_target_diamond;
+    }
 }
