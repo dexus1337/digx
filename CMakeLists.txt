@@ -91,6 +91,9 @@ add_custom_target(copy_assets ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/sounds"
         "${OUTPUT_ASSETS_DIR}/sounds"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/fonts"
+        "${OUTPUT_ASSETS_DIR}/fonts"
     COMMENT "Syncing assets to output directory..."
 )
 

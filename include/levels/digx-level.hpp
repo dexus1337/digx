@@ -9,6 +9,7 @@
  */
 
 #include "zwodee.hpp"
+#include "levels/digx-button.hpp"
 #include <array>
 
 namespace digx
@@ -23,6 +24,7 @@ namespace digx
 
         void on_enter() override;
         void on_exit() override;
+        void set_player_input(const zwodee::input_state& input) override;
         void tick() override;
         void render(zwodee::renderer& target_renderer, double alpha) override;
         zwodee::render_snapshot get_render_snapshot(int display_w, int display_h) const override;
@@ -69,7 +71,8 @@ namespace digx
         std::shared_ptr<zwodee::texture> m_fallback_tex;
         
         // Preloaded enemy textures
-        std::shared_ptr<zwodee::texture> m_vampire_tex;
+        std::shared_ptr<zwodee::texture> m_vampire_sleeping_tex;
+        std::shared_ptr<zwodee::texture> m_vampire_triggered_tex;
         std::shared_ptr<zwodee::texture> m_soldier_tex;
         std::shared_ptr<zwodee::texture> m_mummy_tex;
         std::shared_ptr<zwodee::texture> m_dragon_red_tex;
@@ -91,5 +94,14 @@ namespace digx
         float m_current_darkness = 1.0f;
         float m_target_darkness = 1.0f;
         zwodee::engine* m_engine = nullptr;
+
+        // Pause state members
+        bool m_is_paused = false;
+        bool m_in_settings = false;
+        int m_pause_selected_index = 0;
+        zwodee::input_state m_last_input{};
+        zwodee::input_state m_current_input{};
+        std::unique_ptr<zwodee::font> m_font;
+        std::vector<button> m_pause_buttons;
     };
 }

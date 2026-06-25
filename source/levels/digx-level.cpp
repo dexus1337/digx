@@ -36,8 +36,154 @@ namespace digx
         zwodee::tile_level::on_exit();
     }
 
+    void level::set_player_input(const zwodee::input_state& input)
+    {
+        m_last_input = m_current_input;
+        m_current_input = input;
+
+        // Toggle pause when escape key (action_2) is pressed
+        if (m_current_input.is_down(zwodee::input_state::action_2) && !m_last_input.is_down(zwodee::input_state::action_2))
+        {
+            m_is_paused = !m_is_paused;
+            m_in_settings = false;
+            m_pause_selected_index = 0;
+        }
+
+        if (!m_is_paused)
+        {
+            zwodee::tile_level::set_player_input(input);
+        }
+    }
+
     void level::tick()
     {
+        if (m_is_paused)
+        {
+            // Update layouts dynamically to fit current screen size
+            float screen_w = static_cast<float>(m_engine->get_window().get_width());
+            float btn_w = 300.0f;
+            float btn_h = 50.0f;
+            float btn_x = (screen_w - btn_w) * 0.5f;
+
+            m_pause_buttons.clear();
+            if (!m_in_settings)
+            {
+                m_pause_buttons.push_back(button("Resume", btn_x, 260.0f, btn_w, btn_h));
+                m_pause_buttons.push_back(button("Settings", btn_x, 330.0f, btn_w, btn_h));
+                m_pause_buttons.push_back(button("Back to Main Menu", btn_x, 400.0f, btn_w, btn_h));
+                m_pause_buttons.push_back(button("Exit", btn_x, 470.0f, btn_w, btn_h));
+            }
+            else
+            {
+                bool sound_enabled = !m_engine->get_audio_manager().is_muted();
+                m_pause_buttons.push_back(button(sound_enabled ? "Sound: ON" : "Sound: OFF", btn_x, 260.0f, btn_w, btn_h));
+
+                std::string fps_label = "FPS Cap: Unknown";
+                switch (m_engine->get_fps_limit())
+                {
+                    case zwodee::engine::fps_limit::vsync:    fps_label = "FPS Cap: VSync"; break;
+                    case zwodee::engine::fps_limit::fps_60:   fps_label = "FPS Cap: 60 FPS"; break;
+                    case zwodee::engine::fps_limit::fps_144:  fps_label = "FPS Cap: 144 FPS"; break;
+                    case zwodee::engine::fps_limit::fps_240:  fps_label = "FPS Cap: 240 FPS"; break;
+                    case zwodee::engine::fps_limit::fps_360:  fps_label = "FPS Cap: 360 FPS"; break;
+                    case zwodee::engine::fps_limit::fps_480:  fps_label = "FPS Cap: 480 FPS"; break;
+                    case zwodee::engine::fps_limit::unlocked: fps_label = "FPS Cap: Unlocked"; break;
+                }
+                m_pause_buttons.push_back(button(fps_label, btn_x, 330.0f, btn_w, btn_h));
+                m_pause_buttons.push_back(button("Back", btn_x, 400.0f, btn_w, btn_h));
+            }
+
+            // Mouse controls
+            float mx = 0.0f, my = 0.0f;
+            uint32_t mouse_buttons = SDL_GetMouseState(&mx, &my);
+            float scale = m_engine->get_window().get_scale_factor();
+            mx /= scale;
+            my /= scale;
+            bool is_left_down = (mouse_buttons & SDL_BUTTON_LMASK) != 0;
+
+            static bool was_left_down = false;
+            bool left_clicked = is_left_down && !was_left_down;
+            was_left_down = is_left_down;
+
+            bool hovered_any = false;
+            for (size_t i = 0; i < m_pause_buttons.size(); ++i)
+            {
+                if (m_pause_buttons[i].is_hovered(mx, my))
+                {
+                    m_pause_selected_index = static_cast<int>(i);
+                    hovered_any = true;
+                    break;
+                }
+            }
+
+            // Keyboard navigation
+            if (m_current_input.is_down(zwodee::input_state::move_up) && !m_last_input.is_down(zwodee::input_state::move_up))
+            {
+                m_pause_selected_index = (m_pause_selected_index - 1 + static_cast<int>(m_pause_buttons.size())) % static_cast<int>(m_pause_buttons.size());
+            }
+            else if (m_current_input.is_down(zwodee::input_state::move_down) && !m_last_input.is_down(zwodee::input_state::move_down))
+            {
+                m_pause_selected_index = (m_pause_selected_index + 1) % static_cast<int>(m_pause_buttons.size());
+            }
+
+            // Trigger selected menu item
+            bool trigger_action = (m_current_input.is_down(zwodee::input_state::action_1) && !m_last_input.is_down(zwodee::input_state::action_1)) || (left_clicked && hovered_any);
+
+            if (trigger_action)
+            {
+                if (!m_in_settings)
+                {
+                    if (m_pause_selected_index == 0) // Resume
+                    {
+                        m_is_paused = false;
+                    }
+                    else if (m_pause_selected_index == 1) // Settings
+                    {
+                        m_in_settings = true;
+                        m_pause_selected_index = 0;
+                    }
+                    else if (m_pause_selected_index == 2) // Back to Main Menu
+                    {
+                        m_is_paused = false;
+                        m_engine->get_level_manager().transition_to("main_menu");
+                    }
+                    else if (m_pause_selected_index == 3) // Exit
+                    {
+                        m_engine->stop();
+                    }
+                }
+                else
+                {
+                    if (m_pause_selected_index == 0) // Sound toggle
+                    {
+                        bool sound_enabled = !m_engine->get_audio_manager().is_muted();
+                        m_engine->get_audio_manager().set_muted(sound_enabled);
+                    }
+                    else if (m_pause_selected_index == 1) // FPS Cap toggle
+                    {
+                        zwodee::engine::fps_limit next_limit = zwodee::engine::fps_limit::vsync;
+                        switch (m_engine->get_fps_limit())
+                        {
+                            case zwodee::engine::fps_limit::vsync:    next_limit = zwodee::engine::fps_limit::fps_60; break;
+                            case zwodee::engine::fps_limit::fps_60:   next_limit = zwodee::engine::fps_limit::fps_144; break;
+                            case zwodee::engine::fps_limit::fps_144:  next_limit = zwodee::engine::fps_limit::fps_240; break;
+                            case zwodee::engine::fps_limit::fps_240:  next_limit = zwodee::engine::fps_limit::fps_360; break;
+                            case zwodee::engine::fps_limit::fps_360:  next_limit = zwodee::engine::fps_limit::fps_480; break;
+                            case zwodee::engine::fps_limit::fps_480:  next_limit = zwodee::engine::fps_limit::unlocked; break;
+                            case zwodee::engine::fps_limit::unlocked: next_limit = zwodee::engine::fps_limit::vsync; break;
+                        }
+                        m_engine->set_fps_limit(next_limit);
+                    }
+                    else if (m_pause_selected_index == 2) // Back
+                    {
+                        m_in_settings = false;
+                        m_pause_selected_index = 1; // Highlight settings option
+                    }
+                }
+            }
+            return;
+        }
+
         // Smoothly interpolate level darkness
         if (m_current_darkness != m_target_darkness)
         {
@@ -598,7 +744,8 @@ namespace digx
             std::shared_ptr<zwodee::texture> bg_tex;
             std::shared_ptr<zwodee::texture> fallback_tex;
             
-            std::shared_ptr<zwodee::texture> vampire_tex;
+            std::shared_ptr<zwodee::texture> vampire_sleeping_tex;
+            std::shared_ptr<zwodee::texture> vampire_triggered_tex;
             std::shared_ptr<zwodee::texture> soldier_tex;
             std::shared_ptr<zwodee::texture> mummy_tex;
             std::shared_ptr<zwodee::texture> dragon_red_tex;
@@ -649,7 +796,8 @@ namespace digx
                 bg_tex                        = r.load_dds_texture("assets/textures/header.dds");
                 fallback_tex                  = create_solid_color_texture(r, 32, 32, 255, 0, 0, 255);
  
-                vampire_tex                   = r.load_dds_texture("assets/textures/vampire.dds");
+                vampire_sleeping_tex          = r.load_dds_texture("assets/textures/vampire-sleeping.dds");
+                vampire_triggered_tex         = r.load_dds_texture("assets/textures/vampire-triggered.dds");
                 soldier_tex                   = r.load_dds_texture("assets/textures/soldier.dds");
                 mummy_tex                     = r.load_dds_texture("assets/textures/mummy.dds");
                 dragon_red_tex                = r.load_dds_texture("assets/textures/dragon-red.dds");
@@ -666,6 +814,9 @@ namespace digx
     void level::load_demo_level(zwodee::engine& engine)
     {
         m_engine = &engine;
+        m_font = std::make_unique<zwodee::font>(engine.get_renderer(), "assets/fonts/Roboto-Medium.ttf", 72.0f);
+        m_pause_buttons.clear();
+        
         auto& r = engine.get_renderer();
         auto& audio = engine.get_audio_manager();
 
@@ -675,6 +826,7 @@ namespace digx
             audio.load_sound("running_" + std::to_string(i), "assets/sounds/running/running-" + std::to_string(i) + ".wav");
         }
         audio.load_sound("coin_collected", "assets/sounds/coin-collected.wav");
+        audio.load_sound("vampire_triggered", "assets/sounds/vampire-triggered.wav");
         audio.load_sound("diamond_collected", "assets/sounds/diamond-collected.wav");
         audio.load_sound("equip", "assets/sounds/equip.wav");
         audio.load_sound("garlic_chew", "assets/sounds/garlic-chew.wav");
@@ -726,7 +878,8 @@ namespace digx
         m_bg_tex                        = g_textures.bg_tex;
         m_fallback_tex                  = g_textures.fallback_tex;
 
-        m_vampire_tex                   = g_textures.vampire_tex;
+        m_vampire_sleeping_tex          = g_textures.vampire_sleeping_tex;
+        m_vampire_triggered_tex         = g_textures.vampire_triggered_tex;
         m_soldier_tex                   = g_textures.soldier_tex;
         m_mummy_tex                     = g_textures.mummy_tex;
         m_dragon_red_tex                = g_textures.dragon_red_tex;
@@ -1032,8 +1185,9 @@ namespace digx
         for (int y = 5; y <= 7; ++y)
             for (int x = 14; x <= 16; ++x)
                 dig_tile_at(x, y);
-        const zwodee::texture* vampire_tex_ptr = m_vampire_tex ? m_vampire_tex.get() : fallback_tex_ptr;
-        auto v1 = std::make_unique<vampire>(9, vampire_tex_ptr);
+        const zwodee::texture* sleeping_tex_ptr = m_vampire_sleeping_tex ? m_vampire_sleeping_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* triggered_tex_ptr = m_vampire_triggered_tex ? m_vampire_triggered_tex.get() : fallback_tex_ptr;
+        auto v1 = std::make_unique<vampire>(9, sleeping_tex_ptr, triggered_tex_ptr);
         v1->set_grid_position(15, 6);
         add_entity(std::move(v1));
 
@@ -1373,6 +1527,69 @@ namespace digx
             });
         }
 
+        // Append Pause Menu overlay and buttons at the end of snapshot (renders on top, no camera offset)
+        if (m_is_paused)
+        {
+            float screen_w = static_cast<float>(display_w);
+            float screen_h = static_cast<float>(display_h);
+
+            // 1. Semi-transparent black overlay with blur effect
+            zwodee::render_node overlay_node{};
+            overlay_node.x = 0.0f;
+            overlay_node.y = 0.0f;
+            overlay_node.w = screen_w;
+            overlay_node.h = screen_h;
+            overlay_node.tex = nullptr;
+            overlay_node.is_ui = true;
+            overlay_node.is_blur = true;
+            overlay_node.r = 0; overlay_node.g = 0; overlay_node.b = 0; overlay_node.a = 128; // 50% dark overlay
+            snapshot.push_back(overlay_node);
+
+            // 2. "PAUSED" Title Text
+            if (m_font)
+            {
+                std::string paused_text = "PAUSED";
+                float text_scale = 0.8f; // ~57px size
+                float text_w = 0.0f;
+                for (char c : paused_text)
+                {
+                    text_w += m_font->get_glyph(c).xadvance * text_scale;
+                }
+                float tx = (screen_w - text_w) * 0.5f;
+                std::vector<zwodee::render_node> text_nodes = m_font->get_text_nodes(paused_text, tx, 150.0f, text_scale, 255, 255, 255, 255);
+                for (auto& node : text_nodes)
+                {
+                    node.is_ui = true;
+                }
+                snapshot.insert(snapshot.end(), text_nodes.begin(), text_nodes.end());
+
+                // 2b. Optional "Settings" Subtitle
+                if (m_in_settings)
+                {
+                    std::string subtitle = "Settings";
+                    float sub_scale = 0.45f;
+                    float sub_w = 0.0f;
+                    for (char c : subtitle)
+                    {
+                        sub_w += m_font->get_glyph(c).xadvance * sub_scale;
+                    }
+                    float sx = (screen_w - sub_w) * 0.5f;
+                    std::vector<zwodee::render_node> sub_nodes = m_font->get_text_nodes(subtitle, sx, 210.0f, sub_scale, 180, 180, 220, 255);
+                    for (auto& node : sub_nodes)
+                    {
+                        node.is_ui = true;
+                    }
+                    snapshot.insert(snapshot.end(), sub_nodes.begin(), sub_nodes.end());
+                }
+
+                // 3. Render Buttons
+                for (size_t i = 0; i < m_pause_buttons.size(); ++i)
+                {
+                    m_pause_buttons[i].add_to_snapshot(snapshot, *m_font, m_pause_selected_index == static_cast<int>(i));
+                }
+            }
+        }
+ 
         return snapshot;
     }
 }

@@ -6,8 +6,10 @@
 
 namespace digx
 {
-    vampire::vampire(uint32_t network_id, const zwodee::texture* tex)
-        : zwodee::entity(network_id, tex, 50)
+    vampire::vampire(uint32_t network_id, const zwodee::texture* sleeping_tex, const zwodee::texture* triggered_tex)
+        : zwodee::entity(network_id, sleeping_tex, 50),
+          m_sleeping_tex(sleeping_tex),
+          m_triggered_tex(triggered_tex)
     {
         m_width = 32.0f;
         m_height = 32.0f;
@@ -25,6 +27,7 @@ namespace digx
 
         if (!player || m_is_neutralized)
         {
+            set_texture(m_sleeping_tex);
             return;
         }
 
@@ -32,15 +35,38 @@ namespace digx
         float dy = player->get_y() - m_y;
         float dist = std::sqrt(dx * dx + dy * dy);
 
-        if (dist <= 64.0f)
+        bool was_active = m_is_active;
+
+        if (std::abs(dx) <= 32.1f && std::abs(dy) <= 32.1f) // 1 tile radius (including diagonals)
         {
             m_is_active = true;
+        }
+        else
+        {
+            m_is_active = false;
+        }
+
+        if (m_is_active)
+        {
+            set_texture(m_triggered_tex);
+            if (!was_active)
+            {
+                if (auto* audio = player->get_audio_manager())
+                {
+                    audio->play_sound("vampire_triggered");
+                }
+            }
+        }
+        else
+        {
+            set_texture(m_sleeping_tex);
         }
 
         if (m_is_active && player->get_breath_active_time() > 0.0f)
         {
             m_is_neutralized = true;
             m_is_active = false;
+            set_texture(m_sleeping_tex);
             return;
         }
 
@@ -51,6 +77,7 @@ namespace digx
                 player->use_garlic();
                 m_is_neutralized = true;
                 m_is_active = false;
+                set_texture(m_sleeping_tex);
             }
             else
             {

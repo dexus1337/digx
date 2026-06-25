@@ -17,7 +17,7 @@ namespace digx
     class vampire : public zwodee::entity
     {
     public:
-        vampire(uint32_t network_id, const zwodee::texture* tex);
+        vampire(uint32_t network_id, const zwodee::texture* sleeping_tex, const zwodee::texture* triggered_tex);
 
         void tick() override;
 
@@ -27,6 +27,8 @@ namespace digx
         [[nodiscard]] bool is_neutralized() const;
 
     private:
+        const zwodee::texture* m_sleeping_tex = nullptr;
+        const zwodee::texture* m_triggered_tex = nullptr;
         bool m_is_active = false;
         bool m_is_neutralized = false;
     };
