@@ -8,16 +8,16 @@
  * @date    22.06.2026
  */
 
-#include "zwodee.hpp"
+#include "entities/digx-enemy-base.hpp"
 
 namespace digx
 {
     class player;
 
-    class mummy : public zwodee::entity
+    class mummy : public enemy_base
     {
     public:
-        mummy(uint32_t network_id, const zwodee::texture* tex);
+        mummy(uint32_t network_id, const zwodee::texture* front, const zwodee::texture* back, const zwodee::texture* side);
 
         void tick() override;
 
@@ -28,7 +28,8 @@ namespace digx
 
     private:
         bool m_is_spawned = false;
-        float m_speed = 0.4f;
-        int m_dir_change_ticks = 0;
+        const zwodee::texture* m_front_tex = nullptr;
+        const zwodee::texture* m_back_tex = nullptr;
+        const zwodee::texture* m_side_tex = nullptr;
     };
 }

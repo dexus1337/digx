@@ -52,6 +52,19 @@ namespace digx
         void set_level(zwodee::tile_level* lvl);
         [[nodiscard]] zwodee::tile_level* get_level() const;
         [[nodiscard]] zwodee::audio_manager* get_audio_manager() const;
+        [[nodiscard]] bool is_digging() const { return m_is_digging; }
+        [[nodiscard]] int get_digging_ticks_remaining() const { return m_digging_ticks_remaining; }
+        [[nodiscard]] float get_target_x() const { return m_target_x; }
+        [[nodiscard]] float get_target_y() const { return m_target_y; }
+        
+        void set_digging_textures(
+            const zwodee::texture* shovel_dig_1, const zwodee::texture* shovel_dig_2,
+            const zwodee::texture* shovel_dig_up_1, const zwodee::texture* shovel_dig_up_2,
+            const zwodee::texture* shovel_dig_down_1, const zwodee::texture* shovel_dig_down_2,
+            const zwodee::texture* pickaxe_dig_1, const zwodee::texture* pickaxe_dig_2,
+            const zwodee::texture* pickaxe_dig_up_1, const zwodee::texture* pickaxe_dig_up_2,
+            const zwodee::texture* pickaxe_dig_down_1, const zwodee::texture* pickaxe_dig_down_2
+        );
 
     private:
         zwodee::tile_level* m_level = nullptr;
@@ -109,6 +122,14 @@ namespace digx
         const zwodee::texture* m_pickaxe_running_tex = nullptr;
         const zwodee::texture* m_pickaxe_running_up_tex = nullptr;
         const zwodee::texture* m_pickaxe_running_down_tex = nullptr;
+        
+        const zwodee::texture* m_shovel_dig_texs[2] = {nullptr, nullptr};
+        const zwodee::texture* m_shovel_dig_up_texs[2] = {nullptr, nullptr};
+        const zwodee::texture* m_shovel_dig_down_texs[2] = {nullptr, nullptr};
+        const zwodee::texture* m_pickaxe_dig_texs[2] = {nullptr, nullptr};
+        const zwodee::texture* m_pickaxe_dig_up_texs[2] = {nullptr, nullptr};
+        const zwodee::texture* m_pickaxe_dig_down_texs[2] = {nullptr, nullptr};
+        
         zwodee::audio_manager* m_audio = nullptr;
         bool m_facing_left = false;
     };

@@ -201,6 +201,50 @@ namespace digx
             return;
         }
 
+        // Update mummy spawning triggers
+        {
+            int p_gx = static_cast<int>(std::round(m_player->get_x() / 32.0f));
+            int p_gy = static_cast<int>(std::round(m_player->get_y() / 32.0f));
+
+            for (auto& trigger : m_mummy_triggers)
+            {
+                if (!trigger.triggered)
+                {
+                    if (p_gx == trigger.gx && p_gy == trigger.gy)
+                    {
+                        trigger.triggered = true;
+                        trigger.cooldown_ticks = 384; // 3 seconds initial delay (3 * 128 ticks)
+                    }
+                }
+
+                if (trigger.triggered)
+                {
+                    if (trigger.cooldown_ticks <= 0)
+                    {
+                        // Check if player is NOT currently standing on the spawn tile
+                        if (p_gx != trigger.gx || p_gy != trigger.gy)
+                        {
+                            const zwodee::texture* mummy_front = m_mummy_front_tex ? m_mummy_front_tex.get() : m_fallback_tex.get();
+                            const zwodee::texture* mummy_back = m_mummy_back_tex ? m_mummy_back_tex.get() : m_fallback_tex.get();
+                            const zwodee::texture* mummy_side = m_mummy_side_tex ? m_mummy_side_tex.get() : m_fallback_tex.get();
+                            
+                            auto m = std::make_unique<mummy>(m_next_dynamic_mummy_id++, mummy_front, mummy_back, mummy_side);
+                            m->set_grid_position(trigger.gx, trigger.gy);
+                            m->trigger_spawn(); // Set spawned true
+                            add_entity(std::move(m));
+                            
+                            // Reset cooldown to 5 seconds
+                            trigger.cooldown_ticks = 640;
+                        }
+                    }
+                    else
+                    {
+                        trigger.cooldown_ticks--;
+                    }
+                }
+            }
+        }
+
         if (m_player->is_dead())
         {
             restart();
@@ -727,6 +771,12 @@ namespace digx
             std::shared_ptr<zwodee::texture> player_pickaxe_running_tex;
             std::shared_ptr<zwodee::texture> player_pickaxe_running_up_tex;
             std::shared_ptr<zwodee::texture> player_pickaxe_running_down_tex;
+            std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_shovel_tex;
+            std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_shovel_up_tex;
+            std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_shovel_down_tex;
+            std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_pickaxe_tex;
+            std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_pickaxe_up_tex;
+            std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_pickaxe_down_tex;
             std::shared_ptr<zwodee::texture> stone_black_tex;
             std::shared_ptr<zwodee::texture> stone_grey_tex;
             std::shared_ptr<zwodee::texture> stone_brown_tex;
@@ -748,9 +798,13 @@ namespace digx
             std::shared_ptr<zwodee::texture> vampire_triggered_tex;
             std::shared_ptr<zwodee::texture> soldier_tex;
             std::shared_ptr<zwodee::texture> mummy_tex;
+            std::shared_ptr<zwodee::texture> mummy_front_tex;
+            std::shared_ptr<zwodee::texture> mummy_back_tex;
+            std::shared_ptr<zwodee::texture> mummy_side_tex;
             std::shared_ptr<zwodee::texture> dragon_red_tex;
             std::shared_ptr<zwodee::texture> dragon_green_tex;
             std::shared_ptr<zwodee::texture> dirt_tex;
+            std::array<std::shared_ptr<zwodee::texture>, 3> dirt_breaking_texs;
  
             bool loaded = false;
  
@@ -766,6 +820,28 @@ namespace digx
                 player_pickaxe_running_tex    = r.load_dds_texture("assets/textures/goblin-running-pickaxe.dds");
                 player_pickaxe_running_up_tex  = r.load_dds_texture("assets/textures/goblin-running-up-pickaxe.dds");
                 player_pickaxe_running_down_tex = r.load_dds_texture("assets/textures/goblin-running-down-pickaxe.dds");
+                 
+                player_digging_shovel_tex[0] = r.load_dds_texture("assets/textures/goblin-digging-shovel-1.dds");
+                player_digging_shovel_tex[1] = r.load_dds_texture("assets/textures/goblin-digging-shovel-2.dds");
+                player_digging_shovel_up_tex[0] = r.load_dds_texture("assets/textures/goblin-digging-up-shovel-1.dds");
+                player_digging_shovel_up_tex[1] = r.load_dds_texture("assets/textures/goblin-digging-up-shovel-2.dds");
+                player_digging_shovel_down_tex[0] = r.load_dds_texture("assets/textures/goblin-digging-down-shovel-1.dds");
+                player_digging_shovel_down_tex[1] = r.load_dds_texture("assets/textures/goblin-digging-down-shovel-2.dds");
+
+                player_digging_pickaxe_tex[0] = r.load_dds_texture("assets/textures/goblin-digging-pickaxe-1.dds");
+                player_digging_pickaxe_tex[1] = r.load_dds_texture("assets/textures/goblin-digging-pickaxe-2.dds");
+                player_digging_pickaxe_up_tex[0] = r.load_dds_texture("assets/textures/goblin-digging-up-pickaxe-1.dds");
+                player_digging_pickaxe_up_tex[1] = r.load_dds_texture("assets/textures/goblin-digging-up-pickaxe-2.dds");
+                player_digging_pickaxe_down_tex[0] = r.load_dds_texture("assets/textures/goblin-digging-down-pickaxe-1.dds");
+                player_digging_pickaxe_down_tex[1] = r.load_dds_texture("assets/textures/goblin-digging-down-pickaxe-2.dds");
+
+                for (int i = 0; i < 2; ++i)
+                {
+                    if (!player_digging_pickaxe_tex[i]) player_digging_pickaxe_tex[i] = player_digging_shovel_tex[i];
+                    if (!player_digging_pickaxe_up_tex[i]) player_digging_pickaxe_up_tex[i] = player_digging_shovel_up_tex[i];
+                    if (!player_digging_pickaxe_down_tex[i]) player_digging_pickaxe_down_tex[i] = player_digging_shovel_down_tex[i];
+                }
+
                 stone_black_tex               = r.load_dds_texture("assets/textures/stone-black.dds");
                 stone_grey_tex                = r.load_dds_texture("assets/textures/stone-grey.dds");
                 stone_brown_tex               = r.load_dds_texture("assets/textures/stone-brown.dds");
@@ -800,9 +876,15 @@ namespace digx
                 vampire_triggered_tex         = r.load_dds_texture("assets/textures/vampire-triggered.dds");
                 soldier_tex                   = r.load_dds_texture("assets/textures/soldier.dds");
                 mummy_tex                     = r.load_dds_texture("assets/textures/mummy.dds");
+                mummy_front_tex               = r.load_dds_texture("assets/textures/mummy-front.dds");
+                mummy_back_tex                = r.load_dds_texture("assets/textures/mummy-back.dds");
+                mummy_side_tex                = r.load_dds_texture("assets/textures/mummy-side.dds");
                 dragon_red_tex                = r.load_dds_texture("assets/textures/dragon-red.dds");
                 dragon_green_tex              = r.load_dds_texture("assets/textures/dragon-green.dds");
                 dirt_tex                      = r.load_dds_texture("assets/textures/dirt.dds");
+                dirt_breaking_texs[0]         = r.load_dds_texture("assets/textures/dirt-breaking-1.dds");
+                dirt_breaking_texs[1]         = r.load_dds_texture("assets/textures/dirt-breaking-2.dds");
+                dirt_breaking_texs[2]         = r.load_dds_texture("assets/textures/dirt-breaking-3.dds");
  
                 loaded = true;
             }
@@ -855,6 +937,12 @@ namespace digx
         m_player_pickaxe_running_tex    = g_textures.player_pickaxe_running_tex;
         m_player_pickaxe_running_up_tex  = g_textures.player_pickaxe_running_up_tex;
         m_player_pickaxe_running_down_tex = g_textures.player_pickaxe_running_down_tex;
+        m_player_digging_shovel_tex       = g_textures.player_digging_shovel_tex;
+        m_player_digging_shovel_up_tex    = g_textures.player_digging_shovel_up_tex;
+        m_player_digging_shovel_down_tex  = g_textures.player_digging_shovel_down_tex;
+        m_player_digging_pickaxe_tex      = g_textures.player_digging_pickaxe_tex;
+        m_player_digging_pickaxe_up_tex    = g_textures.player_digging_pickaxe_up_tex;
+        m_player_digging_pickaxe_down_tex  = g_textures.player_digging_pickaxe_down_tex;
         m_stone_black_tex               = g_textures.stone_black_tex;
         m_stone_grey_tex                = g_textures.stone_grey_tex;
         m_stone_brown_tex               = g_textures.stone_brown_tex;
@@ -882,9 +970,13 @@ namespace digx
         m_vampire_triggered_tex         = g_textures.vampire_triggered_tex;
         m_soldier_tex                   = g_textures.soldier_tex;
         m_mummy_tex                     = g_textures.mummy_tex;
+        m_mummy_front_tex               = g_textures.mummy_front_tex;
+        m_mummy_back_tex                = g_textures.mummy_back_tex;
+        m_mummy_side_tex                = g_textures.mummy_side_tex;
         m_dragon_red_tex                = g_textures.dragon_red_tex;
         m_dragon_green_tex              = g_textures.dragon_green_tex;
         m_dirt_tex                      = g_textures.dirt_tex;
+        m_dirt_breaking_texs            = g_textures.dirt_breaking_texs;
 
         const zwodee::texture* fallback_tex_ptr = m_fallback_tex.get();
         const zwodee::texture* shovel_idle = m_player_shovel_tex ? m_player_shovel_tex.get() : fallback_tex_ptr;
@@ -1026,6 +1118,20 @@ namespace digx
 
         // Add player goblin
         auto goblin = std::make_unique<player>(1, shovel_idle, shovel_run, shovel_run_up, shovel_run_down, pickaxe_idle, pickaxe_run, pickaxe_run_up, pickaxe_run_down, &audio);
+        goblin->set_digging_textures(
+            m_player_digging_shovel_tex[0] ? m_player_digging_shovel_tex[0].get() : nullptr,
+            m_player_digging_shovel_tex[1] ? m_player_digging_shovel_tex[1].get() : nullptr,
+            m_player_digging_shovel_up_tex[0] ? m_player_digging_shovel_up_tex[0].get() : nullptr,
+            m_player_digging_shovel_up_tex[1] ? m_player_digging_shovel_up_tex[1].get() : nullptr,
+            m_player_digging_shovel_down_tex[0] ? m_player_digging_shovel_down_tex[0].get() : nullptr,
+            m_player_digging_shovel_down_tex[1] ? m_player_digging_shovel_down_tex[1].get() : nullptr,
+            m_player_digging_pickaxe_tex[0] ? m_player_digging_pickaxe_tex[0].get() : nullptr,
+            m_player_digging_pickaxe_tex[1] ? m_player_digging_pickaxe_tex[1].get() : nullptr,
+            m_player_digging_pickaxe_up_tex[0] ? m_player_digging_pickaxe_up_tex[0].get() : nullptr,
+            m_player_digging_pickaxe_up_tex[1] ? m_player_digging_pickaxe_up_tex[1].get() : nullptr,
+            m_player_digging_pickaxe_down_tex[0] ? m_player_digging_pickaxe_down_tex[0].get() : nullptr,
+            m_player_digging_pickaxe_down_tex[1] ? m_player_digging_pickaxe_down_tex[1].get() : nullptr
+        );
         goblin->set_grid_bounds(get_width(), get_height());
         goblin->set_level(this);
         goblin->set_grid_position(2, 3);
@@ -1126,6 +1232,12 @@ namespace digx
         }
         m_target_gold = 8;
 
+        m_mummy_triggers.clear();
+        m_mummy_triggers.push_back({26, 4, false, 0});
+        m_mummy_triggers.push_back({17, 12, false, 0});
+        m_mummy_triggers.push_back({5, 30, false, 0});
+        m_next_dynamic_mummy_id = 5000;
+
         // Diamonds (8 in total)
         std::vector<std::pair<int, int>> diamond_positions = {
             {10, 3}, {11, 3},
@@ -1200,14 +1312,10 @@ namespace digx
         s1->set_grid_position(28, 8);
         add_entity(std::move(s1));
 
-        // Mummy at bottom-left
+        // Mummy corridor at bottom-left
         for (int y = 18; y <= 22; ++y)
             for (int x = 3; x <= 7; ++x)
                 dig_tile_at(x, y);
-        const zwodee::texture* mummy_tex_ptr = m_mummy_tex ? m_mummy_tex.get() : fallback_tex_ptr;
-        auto m1 = std::make_unique<mummy>(11, mummy_tex_ptr);
-        m1->set_grid_position(5, 20);
-        add_entity(std::move(m1));
 
         // Dragon 1 patrol path (horizontal corridor)
         for (int y = 20; y <= 21; ++y)
@@ -1448,10 +1556,44 @@ namespace digx
             if (camera_y < 0.0f) camera_y = 0.0f;
             if (camera_y > max_camera_y) camera_y = max_camera_y;
 
+            // Add breaking textures if the player is actively digging
+            if (m_player->is_digging())
+            {
+                int max_ticks = m_player->has_pickaxe() ? 48 : 96;
+                int ticks_left = m_player->get_digging_ticks_remaining();
+                float progress = 1.0f - (static_cast<float>(ticks_left) / static_cast<float>(max_ticks));
+                
+                size_t stage = 0;
+                if (progress < 0.333f) stage = 0;
+                else if (progress < 0.666f) stage = 1;
+                else stage = 2;
+
+                if (m_dirt_breaking_texs[stage])
+                {
+                    zwodee::render_node break_node;
+                    break_node.x = m_player->get_target_x();
+                    break_node.y = m_player->get_target_y();
+                    break_node.w = 32.0f;
+                    break_node.h = 32.0f;
+                    break_node.tex = m_dirt_breaking_texs[stage].get();
+                    break_node.src_x = 0;
+                    break_node.src_y = 0;
+                    break_node.src_w = m_dirt_breaking_texs[stage]->get_width();
+                    break_node.src_h = m_dirt_breaking_texs[stage]->get_height();
+                    break_node.flip_horizontal = false;
+                    break_node.flip_vertical = false;
+                    break_node.color_mod = 255;
+                    snapshot.push_back(break_node);
+                }
+            }
+ 
             // Apply level darkness and vertical depth gradient to dirt tiles
             for (auto& node : snapshot)
             {
-                if (node.tex && node.tex == m_dirt_tex.get())
+                if (node.tex && (node.tex == m_dirt_tex.get() ||
+                                 node.tex == m_dirt_breaking_texs[0].get() ||
+                                 node.tex == m_dirt_breaking_texs[1].get() ||
+                                 node.tex == m_dirt_breaking_texs[2].get()))
                 {
                     // Calculate depth factor based on absolute level y coordinate (from y = 64 to y = 1024)
                     float depth_factor = (node.y - 64.0f) / (1024.0f - 64.0f);
@@ -1516,11 +1658,17 @@ namespace digx
                     if (node.tex == m_digged_tex.get() || 
                         node.tex == m_static_stone_textures[0].get() || node.tex == m_static_stone_textures[1].get() ||
                         node.tex == m_static_stone_textures[2].get() || node.tex == m_static_stone_textures[3].get() ||
-                        (node.tex == m_dirt_tex.get() && node.flip_vertical))
+                        node.tex == m_dirt_tex.get())
                     {
                         return 1;
                     }
-                    if (node.tex == m_door_closed_tex.get() || node.tex == m_door_open_tex.get()) return 2;
+                    if (node.tex == m_door_closed_tex.get() || node.tex == m_door_open_tex.get() ||
+                        node.tex == m_dirt_breaking_texs[0].get() ||
+                        node.tex == m_dirt_breaking_texs[1].get() ||
+                        node.tex == m_dirt_breaking_texs[2].get())
+                    {
+                        return 2;
+                    }
                     return 3;
                 };
                 return get_layer(a) < get_layer(b);

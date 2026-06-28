@@ -53,6 +53,12 @@ namespace digx
         std::shared_ptr<zwodee::texture> m_player_pickaxe_running_tex;
         std::shared_ptr<zwodee::texture> m_player_pickaxe_running_up_tex;
         std::shared_ptr<zwodee::texture> m_player_pickaxe_running_down_tex;
+        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_shovel_tex;
+        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_shovel_up_tex;
+        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_shovel_down_tex;
+        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_pickaxe_tex;
+        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_pickaxe_up_tex;
+        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_pickaxe_down_tex;
         std::shared_ptr<zwodee::texture> m_stone_black_tex;
         std::shared_ptr<zwodee::texture> m_stone_grey_tex;
         std::shared_ptr<zwodee::texture> m_stone_brown_tex;
@@ -75,9 +81,13 @@ namespace digx
         std::shared_ptr<zwodee::texture> m_vampire_triggered_tex;
         std::shared_ptr<zwodee::texture> m_soldier_tex;
         std::shared_ptr<zwodee::texture> m_mummy_tex;
+        std::shared_ptr<zwodee::texture> m_mummy_front_tex;
+        std::shared_ptr<zwodee::texture> m_mummy_back_tex;
+        std::shared_ptr<zwodee::texture> m_mummy_side_tex;
         std::shared_ptr<zwodee::texture> m_dragon_red_tex;
         std::shared_ptr<zwodee::texture> m_dragon_green_tex;
         std::shared_ptr<zwodee::texture> m_dirt_tex;
+        std::array<std::shared_ptr<zwodee::texture>, 3> m_dirt_breaking_texs;
 
         // Target number of gold coins to collect to open the exit
         int m_target_gold = 0;
@@ -94,6 +104,16 @@ namespace digx
         float m_current_darkness = 1.0f;
         float m_target_darkness = 1.0f;
         zwodee::engine* m_engine = nullptr;
+
+        struct spawn_trigger_tile
+        {
+            int gx = 0;
+            int gy = 0;
+            bool triggered = false;
+            int cooldown_ticks = 0;
+        };
+        std::vector<spawn_trigger_tile> m_mummy_triggers;
+        uint32_t m_next_dynamic_mummy_id = 5000;
 
         // Pause state members
         bool m_is_paused = false;

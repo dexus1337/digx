@@ -199,17 +199,17 @@ namespace digx
                 m_queued_steps = 0;
                 m_has_queued_move = false;
 
-                // If turning, queue the new direction
-                if ((pressed & zwodee::input_state::move_left) && m_dir_x == 0.0f) {
+                // Queue the new direction (including reversing directions)
+                if (pressed & zwodee::input_state::move_left) {
                     m_queued_dir_x = -1.0f; m_queued_dir_y = 0.0f; m_has_queued_move = true;
                 }
-                else if ((pressed & zwodee::input_state::move_right) && m_dir_x == 0.0f) {
+                else if (pressed & zwodee::input_state::move_right) {
                     m_queued_dir_x = 1.0f; m_queued_dir_y = 0.0f; m_has_queued_move = true;
                 }
-                else if ((pressed & zwodee::input_state::move_up) && m_dir_y == 0.0f) {
+                else if (pressed & zwodee::input_state::move_up) {
                     m_queued_dir_x = 0.0f; m_queued_dir_y = -1.0f; m_has_queued_move = true;
                 }
-                else if ((pressed & zwodee::input_state::move_down) && m_dir_y == 0.0f) {
+                else if (pressed & zwodee::input_state::move_down) {
                     m_queued_dir_x = 0.0f; m_queued_dir_y = 1.0f; m_has_queued_move = true;
                 }
 
@@ -462,7 +462,37 @@ namespace digx
         set_flip_horizontal(m_facing_left);
 
         const zwodee::texture* target_tex = nullptr;
-        if (m_has_pickaxe)
+        if (m_is_digging)
+        {
+            int frame_idx = (m_digging_ticks_remaining / 12) % 2;
+            if (m_has_pickaxe)
+            {
+                if (m_dir_y < 0.0f) target_tex = m_pickaxe_dig_up_texs[frame_idx];
+                else if (m_dir_y > 0.0f) target_tex = m_pickaxe_dig_down_texs[frame_idx];
+                else target_tex = m_pickaxe_dig_texs[frame_idx];
+
+                if (!target_tex)
+                {
+                    if (m_dir_y < 0.0f) target_tex = m_pickaxe_running_up_tex;
+                    else if (m_dir_y > 0.0f) target_tex = m_pickaxe_running_down_tex;
+                    else target_tex = m_pickaxe_running_tex;
+                }
+            }
+            else
+            {
+                if (m_dir_y < 0.0f) target_tex = m_shovel_dig_up_texs[frame_idx];
+                else if (m_dir_y > 0.0f) target_tex = m_shovel_dig_down_texs[frame_idx];
+                else target_tex = m_shovel_dig_texs[frame_idx];
+
+                if (!target_tex)
+                {
+                    if (m_dir_y < 0.0f) target_tex = m_shovel_running_up_tex;
+                    else if (m_dir_y > 0.0f) target_tex = m_shovel_running_down_tex;
+                    else target_tex = m_shovel_running_tex;
+                }
+            }
+        }
+        else if (m_has_pickaxe)
         {
             if (m_is_moving)
             {
@@ -739,5 +769,28 @@ namespace digx
         }
 
         return true;
+    }
+
+    void player::set_digging_textures(
+        const zwodee::texture* shovel_dig_1, const zwodee::texture* shovel_dig_2,
+        const zwodee::texture* shovel_dig_up_1, const zwodee::texture* shovel_dig_up_2,
+        const zwodee::texture* shovel_dig_down_1, const zwodee::texture* shovel_dig_down_2,
+        const zwodee::texture* pickaxe_dig_1, const zwodee::texture* pickaxe_dig_2,
+        const zwodee::texture* pickaxe_dig_up_1, const zwodee::texture* pickaxe_dig_up_2,
+        const zwodee::texture* pickaxe_dig_down_1, const zwodee::texture* pickaxe_dig_down_2
+    )
+    {
+        m_shovel_dig_texs[0] = shovel_dig_1;
+        m_shovel_dig_texs[1] = shovel_dig_2;
+        m_shovel_dig_up_texs[0] = shovel_dig_up_1;
+        m_shovel_dig_up_texs[1] = shovel_dig_up_2;
+        m_shovel_dig_down_texs[0] = shovel_dig_down_1;
+        m_shovel_dig_down_texs[1] = shovel_dig_down_2;
+        m_pickaxe_dig_texs[0] = pickaxe_dig_1;
+        m_pickaxe_dig_texs[1] = pickaxe_dig_2;
+        m_pickaxe_dig_up_texs[0] = pickaxe_dig_up_1;
+        m_pickaxe_dig_up_texs[1] = pickaxe_dig_up_2;
+        m_pickaxe_dig_down_texs[0] = pickaxe_dig_down_1;
+        m_pickaxe_dig_down_texs[1] = pickaxe_dig_down_2;
     }
 }
