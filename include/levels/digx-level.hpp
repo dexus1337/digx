@@ -53,6 +53,12 @@ namespace digx
         std::shared_ptr<zwodee::texture> m_player_pickaxe_running_tex;
         std::shared_ptr<zwodee::texture> m_player_pickaxe_running_up_tex;
         std::shared_ptr<zwodee::texture> m_player_pickaxe_running_down_tex;
+        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_shovel_running_texs;
+        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_shovel_running_up_texs;
+        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_shovel_running_down_texs;
+        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_pickaxe_running_texs;
+        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_pickaxe_running_up_texs;
+        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_pickaxe_running_down_texs;
         std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_shovel_tex;
         std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_shovel_up_tex;
         std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_shovel_down_tex;
@@ -80,6 +86,9 @@ namespace digx
         std::shared_ptr<zwodee::texture> m_vampire_sleeping_tex;
         std::shared_ptr<zwodee::texture> m_vampire_triggered_tex;
         std::shared_ptr<zwodee::texture> m_soldier_tex;
+        std::shared_ptr<zwodee::texture> m_soldier_front_tex;
+        std::shared_ptr<zwodee::texture> m_soldier_back_tex;
+        std::shared_ptr<zwodee::texture> m_soldier_side_tex;
         std::shared_ptr<zwodee::texture> m_mummy_tex;
         std::shared_ptr<zwodee::texture> m_mummy_front_tex;
         std::shared_ptr<zwodee::texture> m_mummy_back_tex;

@@ -73,7 +73,6 @@ namespace digx
             {
                 text_w += f.get_glyph(c).xadvance * scale;
             }
-            float text_h = font_size * scale;
 
             float tx = m_x + (m_w - text_w) * 0.5f;
             float ty = m_y + m_h * 0.5f + (font_size * scale) * 0.3f;

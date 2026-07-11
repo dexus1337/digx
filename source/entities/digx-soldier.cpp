@@ -6,8 +6,11 @@
 
 namespace digx
 {
-    soldier::soldier(uint32_t network_id, const zwodee::texture* tex)
-        : enemy_base(network_id, tex, 0.4f, 100)
+    soldier::soldier(uint32_t network_id, const zwodee::texture* front, const zwodee::texture* back, const zwodee::texture* side)
+        : enemy_base(network_id, front, 0.4f, 100),
+          m_front_tex(front),
+          m_back_tex(back),
+          m_side_tex(side)
     {
     }
 
@@ -19,18 +22,37 @@ namespace digx
             m_vx = 0.0f;
             m_vy = 0.0f;
             m_is_moving = false;
+            set_texture(m_front_tex);
             zwodee::entity::tick();
             return;
         }
 
         enemy_base::tick();
 
-        if (m_dir_x < 0.0f)
+        // Update active texture according to movement direction
+        if (m_dir_y < 0.0f)
         {
+            set_texture(m_back_tex);
+            set_flip_horizontal(false);
+        }
+        else if (m_dir_y > 0.0f)
+        {
+            set_texture(m_front_tex);
+            set_flip_horizontal(false);
+        }
+        else if (m_dir_x < 0.0f)
+        {
+            set_texture(m_side_tex);
             set_flip_horizontal(true);
         }
         else if (m_dir_x > 0.0f)
         {
+            set_texture(m_side_tex);
+            set_flip_horizontal(false);
+        }
+        else
+        {
+            set_texture(m_front_tex);
             set_flip_horizontal(false);
         }
     }

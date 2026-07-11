@@ -66,6 +66,15 @@ namespace digx
             const zwodee::texture* pickaxe_dig_down_1, const zwodee::texture* pickaxe_dig_down_2
         );
 
+        void set_running_textures(
+            const zwodee::texture* shovel_run_1, const zwodee::texture* shovel_run_2,
+            const zwodee::texture* shovel_run_up_1, const zwodee::texture* shovel_run_up_2,
+            const zwodee::texture* shovel_run_down_1, const zwodee::texture* shovel_run_down_2,
+            const zwodee::texture* pickaxe_run_1, const zwodee::texture* pickaxe_run_2,
+            const zwodee::texture* pickaxe_run_up_1, const zwodee::texture* pickaxe_run_up_2,
+            const zwodee::texture* pickaxe_run_down_1, const zwodee::texture* pickaxe_run_down_2
+        );
+
     private:
         zwodee::tile_level* m_level = nullptr;
         int m_gold_collected = 0;
@@ -122,6 +131,15 @@ namespace digx
         const zwodee::texture* m_pickaxe_running_tex = nullptr;
         const zwodee::texture* m_pickaxe_running_up_tex = nullptr;
         const zwodee::texture* m_pickaxe_running_down_tex = nullptr;
+
+        const zwodee::texture* m_shovel_running_texs[2] = {nullptr, nullptr};
+        const zwodee::texture* m_shovel_running_up_texs[2] = {nullptr, nullptr};
+        const zwodee::texture* m_shovel_running_down_texs[2] = {nullptr, nullptr};
+        const zwodee::texture* m_pickaxe_running_texs[2] = {nullptr, nullptr};
+        const zwodee::texture* m_pickaxe_running_up_texs[2] = {nullptr, nullptr};
+        const zwodee::texture* m_pickaxe_running_down_texs[2] = {nullptr, nullptr};
+
+        int m_run_anim_ticks = 0;
         
         const zwodee::texture* m_shovel_dig_texs[2] = {nullptr, nullptr};
         const zwodee::texture* m_shovel_dig_up_texs[2] = {nullptr, nullptr};

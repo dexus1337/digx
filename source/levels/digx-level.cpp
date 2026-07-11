@@ -374,11 +374,11 @@ namespace digx
                             win_h = static_cast<float>(m_engine->get_window().get_height());
                         }
 
-                        float px = m_player ? m_player->get_x() : 0.0f;
-                        float py = m_player ? m_player->get_y() : 0.0f;
+                        float curr_px = m_player ? m_player->get_x() : 0.0f;
+                        float curr_py = m_player ? m_player->get_y() : 0.0f;
 
                         // Horizontal page flipping camera logic matching get_render_snapshot
-                        int page_x = static_cast<int>(std::floor(px / win_w));
+                        int page_x = static_cast<int>(std::floor(curr_px / win_w));
                         int max_page_x = static_cast<int>(std::max(0.0f, std::floor((get_width() * 32.0f - 1.0f) / win_w)));
                         if (page_x < 0) page_x = 0;
                         if (page_x > max_page_x) page_x = max_page_x;
@@ -386,7 +386,7 @@ namespace digx
 
                         // Vertical smooth centering camera logic matching get_render_snapshot
                         float half_height = win_h / 2.0f;
-                        camera_y = py - half_height;
+                        camera_y = curr_py - half_height;
                         float max_camera_y = static_cast<float>(get_height() * 32) - win_h;
                         if (max_camera_y < 0.0f) max_camera_y = 0.0f;
                         if (camera_y < 0.0f) camera_y = 0.0f;
@@ -397,22 +397,22 @@ namespace digx
 
                         for (const auto& other : get_entities())
                         {
-                            if (auto* d = dynamic_cast<diamond*>(other.get()))
+                            if (auto* dm = dynamic_cast<diamond*>(other.get()))
                             {
-                                if (!d->is_dead() && !d->is_permanently_revealed())
+                                if (!dm->is_dead() && !dm->is_permanently_revealed())
                                 {
-                                    int gx = static_cast<int>(std::round(d->get_x() / 32.0f));
-                                    int gy = static_cast<int>(std::round(d->get_y() / 32.0f));
+                                    int gx = static_cast<int>(std::round(dm->get_x() / 32.0f));
+                                    int gy = static_cast<int>(std::round(dm->get_y() / 32.0f));
                                     if (!is_tile_digged(gx, gy))
                                     {
-                                        all_non_digged_diamonds.push_back(d);
+                                        all_non_digged_diamonds.push_back(dm);
 
-                                        float dx = d->get_x();
-                                        float dy = d->get_y();
+                                        float dx = dm->get_x();
+                                        float dy = dm->get_y();
                                         if (dx >= camera_x && dx <= camera_x + win_w &&
                                             dy >= camera_y && dy <= camera_y + win_h)
                                         {
-                                            visible_diamonds.push_back(d);
+                                            visible_diamonds.push_back(dm);
                                         }
                                     }
                                 }
@@ -429,15 +429,15 @@ namespace digx
                             // Find the nearest one to the player
                             diamond* nearest = nullptr;
                             float min_dist_sq = -1.0f;
-                            for (auto* d : all_non_digged_diamonds)
+                            for (auto* dm : all_non_digged_diamonds)
                             {
-                                float diff_x = d->get_x() - px;
-                                float diff_y = d->get_y() - py;
+                                float diff_x = dm->get_x() - curr_px;
+                                float diff_y = dm->get_y() - curr_py;
                                 float dist_sq = diff_x * diff_x + diff_y * diff_y;
                                 if (min_dist_sq < 0.0f || dist_sq < min_dist_sq)
                                 {
                                     min_dist_sq = dist_sq;
-                                    nearest = d;
+                                    nearest = dm;
                                 }
                             }
                             revealed_diamond = nearest;
@@ -771,6 +771,12 @@ namespace digx
             std::shared_ptr<zwodee::texture> player_pickaxe_running_tex;
             std::shared_ptr<zwodee::texture> player_pickaxe_running_up_tex;
             std::shared_ptr<zwodee::texture> player_pickaxe_running_down_tex;
+            std::array<std::shared_ptr<zwodee::texture>, 2> player_shovel_running_texs;
+            std::array<std::shared_ptr<zwodee::texture>, 2> player_shovel_running_up_texs;
+            std::array<std::shared_ptr<zwodee::texture>, 2> player_shovel_running_down_texs;
+            std::array<std::shared_ptr<zwodee::texture>, 2> player_pickaxe_running_texs;
+            std::array<std::shared_ptr<zwodee::texture>, 2> player_pickaxe_running_up_texs;
+            std::array<std::shared_ptr<zwodee::texture>, 2> player_pickaxe_running_down_texs;
             std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_shovel_tex;
             std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_shovel_up_tex;
             std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_shovel_down_tex;
@@ -797,6 +803,9 @@ namespace digx
             std::shared_ptr<zwodee::texture> vampire_sleeping_tex;
             std::shared_ptr<zwodee::texture> vampire_triggered_tex;
             std::shared_ptr<zwodee::texture> soldier_tex;
+            std::shared_ptr<zwodee::texture> soldier_front_tex;
+            std::shared_ptr<zwodee::texture> soldier_back_tex;
+            std::shared_ptr<zwodee::texture> soldier_side_tex;
             std::shared_ptr<zwodee::texture> mummy_tex;
             std::shared_ptr<zwodee::texture> mummy_front_tex;
             std::shared_ptr<zwodee::texture> mummy_back_tex;
@@ -813,13 +822,27 @@ namespace digx
                 if (loaded) return;
  
                 player_shovel_tex             = r.load_dds_texture("assets/textures/goblin-idle-shovel.dds");
-                player_shovel_running_tex     = r.load_dds_texture("assets/textures/goblin-running-shovel.dds");
-                player_shovel_running_up_tex  = r.load_dds_texture("assets/textures/goblin-running-up-shovel.dds");
-                player_shovel_running_down_tex = r.load_dds_texture("assets/textures/goblin-running-down-shovel.dds");
+                player_shovel_running_tex     = r.load_dds_texture("assets/textures/goblin-running-shovel-1.dds");
+                player_shovel_running_up_tex  = r.load_dds_texture("assets/textures/goblin-running-up-shovel-1.dds");
+                player_shovel_running_down_tex = r.load_dds_texture("assets/textures/goblin-running-down-shovel-1.dds");
                 player_pickaxe_tex            = r.load_dds_texture("assets/textures/goblin-idle-pickaxe.dds");
-                player_pickaxe_running_tex    = r.load_dds_texture("assets/textures/goblin-running-pickaxe.dds");
-                player_pickaxe_running_up_tex  = r.load_dds_texture("assets/textures/goblin-running-up-pickaxe.dds");
-                player_pickaxe_running_down_tex = r.load_dds_texture("assets/textures/goblin-running-down-pickaxe.dds");
+                player_pickaxe_running_tex    = r.load_dds_texture("assets/textures/goblin-running-pickaxe-1.dds");
+                player_pickaxe_running_up_tex  = r.load_dds_texture("assets/textures/goblin-running-up-pickaxe-1.dds");
+                player_pickaxe_running_down_tex = r.load_dds_texture("assets/textures/goblin-running-down-pickaxe-1.dds");
+
+                player_shovel_running_texs[0] = r.load_dds_texture("assets/textures/goblin-running-shovel-1.dds");
+                player_shovel_running_texs[1] = r.load_dds_texture("assets/textures/goblin-running-shovel-2.dds");
+                player_shovel_running_up_texs[0] = r.load_dds_texture("assets/textures/goblin-running-up-shovel-1.dds");
+                player_shovel_running_up_texs[1] = r.load_dds_texture("assets/textures/goblin-running-up-shovel-2.dds");
+                player_shovel_running_down_texs[0] = r.load_dds_texture("assets/textures/goblin-running-down-shovel-1.dds");
+                player_shovel_running_down_texs[1] = r.load_dds_texture("assets/textures/goblin-running-down-shovel-2.dds");
+
+                player_pickaxe_running_texs[0] = r.load_dds_texture("assets/textures/goblin-running-pickaxe-1.dds");
+                player_pickaxe_running_texs[1] = r.load_dds_texture("assets/textures/goblin-running-pickaxe-2.dds");
+                player_pickaxe_running_up_texs[0] = r.load_dds_texture("assets/textures/goblin-running-up-pickaxe-1.dds");
+                player_pickaxe_running_up_texs[1] = r.load_dds_texture("assets/textures/goblin-running-up-pickaxe-2.dds");
+                player_pickaxe_running_down_texs[0] = r.load_dds_texture("assets/textures/goblin-running-down-pickaxe-1.dds");
+                player_pickaxe_running_down_texs[1] = r.load_dds_texture("assets/textures/goblin-running-down-pickaxe-2.dds");
                  
                 player_digging_shovel_tex[0] = r.load_dds_texture("assets/textures/goblin-digging-shovel-1.dds");
                 player_digging_shovel_tex[1] = r.load_dds_texture("assets/textures/goblin-digging-shovel-2.dds");
@@ -874,7 +897,10 @@ namespace digx
  
                 vampire_sleeping_tex          = r.load_dds_texture("assets/textures/vampire-sleeping.dds");
                 vampire_triggered_tex         = r.load_dds_texture("assets/textures/vampire-triggered.dds");
-                soldier_tex                   = r.load_dds_texture("assets/textures/soldier.dds");
+                soldier_tex                   = r.load_dds_texture("assets/textures/soldier-front.dds");
+                soldier_front_tex             = r.load_dds_texture("assets/textures/soldier-front.dds");
+                soldier_back_tex              = r.load_dds_texture("assets/textures/soldier-back.dds");
+                soldier_side_tex              = r.load_dds_texture("assets/textures/soldier-side.dds");
                 mummy_tex                     = r.load_dds_texture("assets/textures/mummy.dds");
                 mummy_front_tex               = r.load_dds_texture("assets/textures/mummy-front.dds");
                 mummy_back_tex                = r.load_dds_texture("assets/textures/mummy-back.dds");
@@ -930,13 +956,13 @@ namespace digx
         g_textures.load_all(r);
 
         m_player_shovel_tex             = g_textures.player_shovel_tex;
-        m_player_shovel_running_tex     = g_textures.player_shovel_running_tex;
-        m_player_shovel_running_up_tex  = g_textures.player_shovel_running_up_tex;
-        m_player_shovel_running_down_tex = g_textures.player_shovel_running_down_tex;
+        m_player_shovel_running_texs     = g_textures.player_shovel_running_texs;
+        m_player_shovel_running_up_texs  = g_textures.player_shovel_running_up_texs;
+        m_player_shovel_running_down_texs = g_textures.player_shovel_running_down_texs;
+        m_player_pickaxe_running_texs    = g_textures.player_pickaxe_running_texs;
+        m_player_pickaxe_running_up_texs  = g_textures.player_pickaxe_running_up_texs;
+        m_player_pickaxe_running_down_texs = g_textures.player_pickaxe_running_down_texs;
         m_player_pickaxe_tex            = g_textures.player_pickaxe_tex;
-        m_player_pickaxe_running_tex    = g_textures.player_pickaxe_running_tex;
-        m_player_pickaxe_running_up_tex  = g_textures.player_pickaxe_running_up_tex;
-        m_player_pickaxe_running_down_tex = g_textures.player_pickaxe_running_down_tex;
         m_player_digging_shovel_tex       = g_textures.player_digging_shovel_tex;
         m_player_digging_shovel_up_tex    = g_textures.player_digging_shovel_up_tex;
         m_player_digging_shovel_down_tex  = g_textures.player_digging_shovel_down_tex;
@@ -969,6 +995,9 @@ namespace digx
         m_vampire_sleeping_tex          = g_textures.vampire_sleeping_tex;
         m_vampire_triggered_tex         = g_textures.vampire_triggered_tex;
         m_soldier_tex                   = g_textures.soldier_tex;
+        m_soldier_front_tex             = g_textures.soldier_front_tex;
+        m_soldier_back_tex              = g_textures.soldier_back_tex;
+        m_soldier_side_tex              = g_textures.soldier_side_tex;
         m_mummy_tex                     = g_textures.mummy_tex;
         m_mummy_front_tex               = g_textures.mummy_front_tex;
         m_mummy_back_tex                = g_textures.mummy_back_tex;
@@ -1131,6 +1160,20 @@ namespace digx
             m_player_digging_pickaxe_up_tex[1] ? m_player_digging_pickaxe_up_tex[1].get() : nullptr,
             m_player_digging_pickaxe_down_tex[0] ? m_player_digging_pickaxe_down_tex[0].get() : nullptr,
             m_player_digging_pickaxe_down_tex[1] ? m_player_digging_pickaxe_down_tex[1].get() : nullptr
+        );
+        goblin->set_running_textures(
+            m_player_shovel_running_texs[0] ? m_player_shovel_running_texs[0].get() : nullptr,
+            m_player_shovel_running_texs[1] ? m_player_shovel_running_texs[1].get() : nullptr,
+            m_player_shovel_running_up_texs[0] ? m_player_shovel_running_up_texs[0].get() : nullptr,
+            m_player_shovel_running_up_texs[1] ? m_player_shovel_running_up_texs[1].get() : nullptr,
+            m_player_shovel_running_down_texs[0] ? m_player_shovel_running_down_texs[0].get() : nullptr,
+            m_player_shovel_running_down_texs[1] ? m_player_shovel_running_down_texs[1].get() : nullptr,
+            m_player_pickaxe_running_texs[0] ? m_player_pickaxe_running_texs[0].get() : nullptr,
+            m_player_pickaxe_running_texs[1] ? m_player_pickaxe_running_texs[1].get() : nullptr,
+            m_player_pickaxe_running_up_texs[0] ? m_player_pickaxe_running_up_texs[0].get() : nullptr,
+            m_player_pickaxe_running_up_texs[1] ? m_player_pickaxe_running_up_texs[1].get() : nullptr,
+            m_player_pickaxe_running_down_texs[0] ? m_player_pickaxe_running_down_texs[0].get() : nullptr,
+            m_player_pickaxe_running_down_texs[1] ? m_player_pickaxe_running_down_texs[1].get() : nullptr
         );
         goblin->set_grid_bounds(get_width(), get_height());
         goblin->set_level(this);
@@ -1307,8 +1350,10 @@ namespace digx
         for (int y = 6; y <= 9; ++y)
             for (int x = 26; x <= 32; ++x)
                 dig_tile_at(x, y);
-        const zwodee::texture* soldier_tex_ptr = m_soldier_tex ? m_soldier_tex.get() : fallback_tex_ptr;
-        auto s1 = std::make_unique<soldier>(10, soldier_tex_ptr);
+        const zwodee::texture* soldier_front = m_soldier_front_tex ? m_soldier_front_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* soldier_back = m_soldier_back_tex ? m_soldier_back_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* soldier_side = m_soldier_side_tex ? m_soldier_side_tex.get() : fallback_tex_ptr;
+        auto s1 = std::make_unique<soldier>(10, soldier_front, soldier_back, soldier_side);
         s1->set_grid_position(28, 8);
         add_entity(std::move(s1));
 
