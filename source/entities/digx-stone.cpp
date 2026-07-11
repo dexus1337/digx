@@ -20,13 +20,23 @@ namespace digx
             if (m_wiggle_ticks <= 0)
             {
                 m_is_falling = true;
+                m_fall_ticks = 0;
             }
             return;
         }
 
         if (m_is_moving)
         {
-            float speed = m_is_falling ? m_fall_speed : 1.0f;
+            float speed = 1.0f;
+            if (m_is_falling)
+            {
+                m_fall_ticks++;
+                speed = 0.25f + (static_cast<float>(m_fall_ticks) * 0.025f);
+                if (speed > 2.0f)
+                {
+                    speed = 2.0f;
+                }
+            }
             m_vx = m_dir_x * speed;
             m_vy = m_dir_y * speed;
             m_x += m_vx;
@@ -60,7 +70,7 @@ namespace digx
 
         if (m_wiggle_ticks > 0)
         {
-            render_x += std::sin(static_cast<float>(m_wiggle_ticks) * 0.5f) * 2.0f;
+            render_x += std::sin(static_cast<float>(m_wiggle_ticks) * 0.375f) * 2.0f;
         }
 
         int frame_width = m_texture->get_width();
@@ -81,7 +91,7 @@ namespace digx
         float rx = m_x;
         if (m_wiggle_ticks > 0)
         {
-            rx += std::sin(static_cast<float>(m_wiggle_ticks) * 0.5f) * 2.0f;
+            rx += std::sin(static_cast<float>(m_wiggle_ticks) * 0.375f) * 2.0f;
         }
 
         return zwodee::render_node{ rx, m_y, m_width, m_height, m_texture, 0, 0, frame_width, frame_height };
@@ -99,11 +109,11 @@ namespace digx
 
     int stone::get_explosion_radius() const
     {
-        if (m_color == color_black)
+        if (m_color == color_high)
         {
             return 2;
         }
-        else if (m_color == color_grey)
+        else if (m_color == color_mid)
         {
             return 1;
         }

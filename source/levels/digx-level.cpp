@@ -57,6 +57,84 @@ namespace digx
 
     void level::tick()
     {
+        if (!m_player) return;
+
+        if (m_fart_effect_ticks > 0)
+        {
+            m_fart_effect_ticks--;
+        }
+
+        if (m_game_over)
+        {
+            float screen_w = static_cast<float>(m_engine->get_window().get_width());
+            float btn_w = 300.0f;
+            float btn_h = 50.0f;
+            float btn_x = (screen_w - btn_w) * 0.5f;
+
+            m_game_over_buttons.clear();
+            m_game_over_buttons.push_back(button("Restart", btn_x, 260.0f, btn_w, btn_h));
+            m_game_over_buttons.push_back(button("Main Menu", btn_x, 330.0f, btn_w, btn_h));
+            m_game_over_buttons.push_back(button("Exit", btn_x, 400.0f, btn_w, btn_h));
+
+            // Mouse controls
+            float mx = 0.0f, my = 0.0f;
+            uint32_t mouse_buttons = SDL_GetMouseState(&mx, &my);
+            float scale = m_engine->get_window().get_scale_factor();
+            mx /= scale;
+            my /= scale;
+            bool is_left_down = (mouse_buttons & SDL_BUTTON_LMASK) != 0;
+
+            static bool was_left_down = false;
+            bool left_clicked = is_left_down && !was_left_down;
+            was_left_down = is_left_down;
+
+            bool hovered_any = false;
+            for (size_t i = 0; i < m_game_over_buttons.size(); ++i)
+            {
+                if (m_game_over_buttons[i].is_hovered(mx, my))
+                {
+                    m_game_over_selected_index = static_cast<int>(i);
+                    hovered_any = true;
+                    break;
+                }
+            }
+
+            // Keyboard navigation
+            if (m_current_input.is_down(zwodee::input_state::move_up) && !m_last_input.is_down(zwodee::input_state::move_up))
+            {
+                m_game_over_selected_index = (m_game_over_selected_index - 1 + static_cast<int>(m_game_over_buttons.size())) % static_cast<int>(m_game_over_buttons.size());
+            }
+            else if (m_current_input.is_down(zwodee::input_state::move_down) && !m_last_input.is_down(zwodee::input_state::move_down))
+            {
+                m_game_over_selected_index = (m_game_over_selected_index + 1) % static_cast<int>(m_game_over_buttons.size());
+            }
+
+            // Trigger selected menu item
+            bool trigger_action = (m_current_input.is_down(zwodee::input_state::action_1) && !m_last_input.is_down(zwodee::input_state::action_1)) || (left_clicked && hovered_any);
+
+            if (trigger_action)
+            {
+                if (m_game_over_selected_index == 0) // Restart
+                {
+                    m_game_over = false;
+                    m_death_sequence_ticks = -1;
+                    restart();
+                }
+                else if (m_game_over_selected_index == 1) // Main Menu
+                {
+                    m_game_over = false;
+                    m_death_sequence_ticks = -1;
+                    m_engine->get_level_manager().transition_to("main_menu");
+                }
+                else if (m_game_over_selected_index == 2) // Exit
+                {
+                    m_engine->stop();
+                }
+            }
+            m_last_input = m_current_input;
+            return;
+        }
+
         if (m_is_paused)
         {
             // Update layouts dynamically to fit current screen size
@@ -247,7 +325,28 @@ namespace digx
 
         if (m_player->is_dead())
         {
-            restart();
+            if (m_death_sequence_ticks == -1)
+            {
+                if (auto* audio = m_player->get_audio_manager())
+                {
+                    audio->play_sound("death");
+                }
+                m_player->set_texture(m_player_dead_tex ? m_player_dead_tex.get() : m_fallback_tex.get());
+                m_death_sequence_ticks = 384; // 3 seconds at 128Hz
+            }
+            else if (m_death_sequence_ticks > 0)
+            {
+                m_death_sequence_ticks--;
+                if (m_death_sequence_ticks == 0)
+                {
+                    m_game_over = true;
+                    m_game_over_selected_index = 0;
+                    if (auto* audio = m_player->get_audio_manager())
+                    {
+                        audio->play_sound("gameover");
+                    }
+                }
+            }
             return;
         }
 
@@ -549,7 +648,12 @@ namespace digx
                             {
                                 if (st->is_falling())
                                 {
-                                    m_player->take_damage(999);
+                                    int st_gx = static_cast<int>(std::round(st->get_x() / 32.0f));
+                                    int p_gx = static_cast<int>(std::round(m_player->get_x() / 32.0f));
+                                    if (st_gx == p_gx)
+                                    {
+                                        m_player->take_damage(999);
+                                    }
                                 }
                             }
                             else
@@ -561,10 +665,19 @@ namespace digx
                                                    !dynamic_cast<garlic_bulb*>(other.get()) &&
                                                    !dynamic_cast<onion_bulb*>(other.get()) &&
                                                    !dynamic_cast<pickaxe*>(other.get()) &&
+                                                   !dynamic_cast<vampire*>(other.get()) &&
                                                    !dynamic_cast<exit_door*>(other.get());
                                 if (is_killable)
                                 {
-                                    other->take_damage(999);
+                                    if (st->is_falling())
+                                    {
+                                        int st_gx = static_cast<int>(std::round(st->get_x() / 32.0f));
+                                        int ot_gx = static_cast<int>(std::round(other->get_x() / 32.0f));
+                                        if (st_gx == ot_gx)
+                                        {
+                                            other->take_damage(999);
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -667,8 +780,9 @@ namespace digx
 
                         if (other_stone)
                         {
+                            int min_radius = std::min(st->get_explosion_radius(), other_stone->get_explosion_radius());
                             st->take_damage(999);
-                            explode_stone(other_stone);
+                            explode_stone(other_stone, min_radius);
                         }
                     }
                 }
@@ -783,9 +897,9 @@ namespace digx
             std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_pickaxe_tex;
             std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_pickaxe_up_tex;
             std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_pickaxe_down_tex;
-            std::shared_ptr<zwodee::texture> stone_black_tex;
-            std::shared_ptr<zwodee::texture> stone_grey_tex;
-            std::shared_ptr<zwodee::texture> stone_brown_tex;
+            std::shared_ptr<zwodee::texture> stone_high_tex;
+            std::shared_ptr<zwodee::texture> stone_low_tex;
+            std::shared_ptr<zwodee::texture> stone_mid_tex;
             std::shared_ptr<zwodee::texture> pickaxe_tex;
             std::shared_ptr<zwodee::texture> coin_tex;
             std::shared_ptr<zwodee::texture> door_closed_tex;
@@ -802,6 +916,8 @@ namespace digx
             
             std::shared_ptr<zwodee::texture> vampire_sleeping_tex;
             std::shared_ptr<zwodee::texture> vampire_triggered_tex;
+            std::shared_ptr<zwodee::texture> player_dead_tex;
+            std::shared_ptr<zwodee::texture> fart_tex;
             std::shared_ptr<zwodee::texture> soldier_tex;
             std::shared_ptr<zwodee::texture> soldier_front_tex;
             std::shared_ptr<zwodee::texture> soldier_back_tex;
@@ -865,9 +981,9 @@ namespace digx
                     if (!player_digging_pickaxe_down_tex[i]) player_digging_pickaxe_down_tex[i] = player_digging_shovel_down_tex[i];
                 }
 
-                stone_black_tex               = r.load_dds_texture("assets/textures/stone-black.dds");
-                stone_grey_tex                = r.load_dds_texture("assets/textures/stone-grey.dds");
-                stone_brown_tex               = r.load_dds_texture("assets/textures/stone-brown.dds");
+                stone_high_tex                = r.load_dds_texture("assets/textures/stone-high.dds");
+                stone_low_tex                 = r.load_dds_texture("assets/textures/stone-low.dds");
+                stone_mid_tex                 = r.load_dds_texture("assets/textures/stone-mid.dds");
                 pickaxe_tex                   = r.load_dds_texture("assets/textures/pickaxe.dds");
                 coin_tex                      = r.load_dds_texture("assets/textures/coin.dds");
                 door_closed_tex               = r.load_dds_texture("assets/textures/door-closed.dds");
@@ -897,6 +1013,8 @@ namespace digx
  
                 vampire_sleeping_tex          = r.load_dds_texture("assets/textures/vampire-sleeping.dds");
                 vampire_triggered_tex         = r.load_dds_texture("assets/textures/vampire-triggered.dds");
+                player_dead_tex               = r.load_dds_texture("assets/textures/goblin-dead.dds");
+                fart_tex                      = r.load_dds_texture("assets/textures/fart.dds");
                 soldier_tex                   = r.load_dds_texture("assets/textures/soldier-front.dds");
                 soldier_front_tex             = r.load_dds_texture("assets/textures/soldier-front.dds");
                 soldier_back_tex              = r.load_dds_texture("assets/textures/soldier-back.dds");
@@ -944,6 +1062,14 @@ namespace digx
         audio.load_sound("explosion", "assets/sounds/explosion.wav");
         audio.load_sound("stone_impact", "assets/sounds/stone-impact.wav");
         audio.load_sound("appear", "assets/sounds/appear.wav");
+        audio.load_sound("gameover", "assets/sounds/gameover.wav");
+        audio.load_sound("death", "assets/sounds/death.wav");
+
+        // Load fart sounds
+        for (int i = 1; i <= 5; ++i)
+        {
+            audio.load_sound("fart-" + std::to_string(i), "assets/sounds/fart-" + std::to_string(i) + ".wav");
+        }
 
         // Load digging sounds
         for (int i = 1; i <= 4; ++i)
@@ -969,9 +1095,9 @@ namespace digx
         m_player_digging_pickaxe_tex      = g_textures.player_digging_pickaxe_tex;
         m_player_digging_pickaxe_up_tex    = g_textures.player_digging_pickaxe_up_tex;
         m_player_digging_pickaxe_down_tex  = g_textures.player_digging_pickaxe_down_tex;
-        m_stone_black_tex               = g_textures.stone_black_tex;
-        m_stone_grey_tex                = g_textures.stone_grey_tex;
-        m_stone_brown_tex               = g_textures.stone_brown_tex;
+        m_stone_high_tex                = g_textures.stone_high_tex;
+        m_stone_low_tex                 = g_textures.stone_low_tex;
+        m_stone_mid_tex                 = g_textures.stone_mid_tex;
         m_pickaxe_tex                   = g_textures.pickaxe_tex;
         m_coin_tex                      = g_textures.coin_tex;
         m_door_closed_tex               = g_textures.door_closed_tex;
@@ -994,6 +1120,8 @@ namespace digx
 
         m_vampire_sleeping_tex          = g_textures.vampire_sleeping_tex;
         m_vampire_triggered_tex         = g_textures.vampire_triggered_tex;
+        m_player_dead_tex               = g_textures.player_dead_tex;
+        m_fart_tex                      = g_textures.fart_tex;
         m_soldier_tex                   = g_textures.soldier_tex;
         m_soldier_front_tex             = g_textures.soldier_front_tex;
         m_soldier_back_tex              = g_textures.soldier_back_tex;
@@ -1016,9 +1144,9 @@ namespace digx
         const zwodee::texture* pickaxe_run = m_player_pickaxe_running_tex ? m_player_pickaxe_running_tex.get() : fallback_tex_ptr;
         const zwodee::texture* pickaxe_run_up = m_player_pickaxe_running_up_tex ? m_player_pickaxe_running_up_tex.get() : fallback_tex_ptr;
         const zwodee::texture* pickaxe_run_down = m_player_pickaxe_running_down_tex ? m_player_pickaxe_running_down_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* stone_black_tex = m_stone_black_tex ? m_stone_black_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* stone_grey_tex = m_stone_grey_tex ? m_stone_grey_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* stone_brown_tex = m_stone_brown_tex ? m_stone_brown_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* stone_high_tex = m_stone_high_tex ? m_stone_high_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* stone_low_tex = m_stone_low_tex ? m_stone_low_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* stone_mid_tex = m_stone_mid_tex ? m_stone_mid_tex.get() : fallback_tex_ptr;
         const zwodee::texture* pickaxe_tex = m_pickaxe_tex ? m_pickaxe_tex.get() : fallback_tex_ptr;
         const zwodee::texture* coint_text = m_coin_tex ? m_coin_tex.get() : fallback_tex_ptr;
         const zwodee::texture* door_closed = m_door_closed_tex ? m_door_closed_tex.get() : fallback_tex_ptr;
@@ -1056,62 +1184,23 @@ namespace digx
             }
         }
 
-        // Initialize outer borders and inner walls of static stones
+        // Initialize static stone barriers (barriers at y = 6, y = 14, and y = 24 to block downward progress)
         std::vector<std::pair<int, int>> static_stone_positions;
-        
-        // Left and Right outer borders
-        for (int y = 1; y <= 33; ++y)
-        {
-            static_stone_positions.push_back({0, y});
-            static_stone_positions.push_back({34, y});
-        }
-        // Top and Bottom outer borders (defining the 1-tile margin offset at top/bottom)
-        for (int x = 1; x < 34; ++x)
-        {
-            static_stone_positions.push_back({x, 1});
-            static_stone_positions.push_back({x, 33});
-        }
 
-        // Inner walls with gaps to allow player passage/exploration
-        // Wall at y = 10
-        for (int x = 1; x <= 22; ++x)
+        // Barrier 1 at y = 6
+        for (int x = 0; x < 35; ++x)
         {
-            if (x != 10 && x != 11)
-            {
-                static_stone_positions.push_back({x, 10});
-            }
+            static_stone_positions.push_back({x, 6});
         }
-        // Wall at x = 22
-        for (int y = 3; y <= 10; ++y)
+        // Barrier 2 at y = 14
+        for (int x = 0; x < 35; ++x)
         {
-            if (y != 6)
-            {
-                static_stone_positions.push_back({22, y});
-            }
+            static_stone_positions.push_back({x, 14});
         }
-        // Wall at y = 17
-        for (int x = 10; x <= 33; ++x)
+        // Barrier 3 at y = 24
+        for (int x = 0; x < 35; ++x)
         {
-            if (x != 20 && x != 21)
-            {
-                static_stone_positions.push_back({x, 17});
-            }
-        }
-        // Wall at x = 10
-        for (int y = 17; y <= 25; ++y)
-        {
-            if (y != 21)
-            {
-                static_stone_positions.push_back({10, y});
-            }
-        }
-        // Wall at y = 26
-        for (int x = 1; x <= 24; ++x)
-        {
-            if (x != 12 && x != 13)
-            {
-                static_stone_positions.push_back({x, 26});
-            }
+            static_stone_positions.push_back({x, 24});
         }
 
         // Set the static stone tiles
@@ -1136,16 +1225,20 @@ namespace digx
             }
         };
 
-        // Dig a starting chamber (3x3 around the player spawn)
-        for (int y = 3; y <= 5; ++y)
+        // Dig a starting chamber at the very top (3x3 around player spawn at 17, 2)
+        for (int y = 2; y <= 4; ++y)
         {
-            for (int x = 1; x <= 3; ++x)
+            for (int x = 16; x <= 18; ++x)
             {
+                if (x == 17 && y == 4)
+                {
+                    continue; // Leave as dirt to support puzzle1_stone1 at (17, 3)
+                }
                 dig_tile_at(x, y);
             }
         }
 
-        // Add player goblin
+        // Add player goblin at the top center
         auto goblin = std::make_unique<player>(1, shovel_idle, shovel_run, shovel_run_up, shovel_run_down, pickaxe_idle, pickaxe_run, pickaxe_run_up, pickaxe_run_down, &audio);
         goblin->set_digging_textures(
             m_player_digging_shovel_tex[0] ? m_player_digging_shovel_tex[0].get() : nullptr,
@@ -1177,195 +1270,77 @@ namespace digx
         );
         goblin->set_grid_bounds(get_width(), get_height());
         goblin->set_level(this);
-        goblin->set_grid_position(2, 3);
+        goblin->set_grid_position(17, 2);
         m_player = goblin.get();
         add_entity(std::move(goblin));
 
-        // Dig spawns for movable stones (blocking paths)
-        dig_tile_at(4, 3);
-        auto stone1 = std::make_unique<stone>(2, stone_black_tex, stone::color_black);
-        stone1->set_grid_position(4, 3);
-        add_entity(std::move(stone1));
+        // Puzzle 1 (Opening Barrier at y=6):
+        // Place two stone-mid blocks with a 1-tile gap (at y=3 and y=5) in the starting corridor.
+        // Digging under the top stone lets it fall onto the bottom one to trigger an explosion!
+        auto puzzle1_stone1 = std::make_unique<stone>(810, stone_mid_tex, stone::color_mid);
+        puzzle1_stone1->set_grid_position(17, 3);
+        add_entity(std::move(puzzle1_stone1));
 
-        dig_tile_at(23, 6);
-        auto stone2 = std::make_unique<stone>(13, stone_grey_tex, stone::color_grey);
-        stone2->set_grid_position(23, 6);
-        add_entity(std::move(stone2));
+        dig_tile_at(17, 5);
+        auto puzzle1_stone2 = std::make_unique<stone>(811, stone_mid_tex, stone::color_mid);
+        puzzle1_stone2->set_grid_position(17, 5);
+        add_entity(std::move(puzzle1_stone2));
 
-        dig_tile_at(18, 12);
-        auto stone3 = std::make_unique<stone>(14, stone_brown_tex, stone::color_brown);
-        stone3->set_grid_position(18, 12);
-        add_entity(std::move(stone3));
-
-        // Additional stones for testing explosions and mechanics
-        // Placed in patrolling corridors and enemy areas (away from starting spawn)
-        
-        // Vampire corridor area
-        dig_tile_at(16, 5);
-        auto stone_extra1 = std::make_unique<stone>(800, stone_grey_tex, stone::color_grey);
-        stone_extra1->set_grid_position(16, 5);
-        add_entity(std::move(stone_extra1));
-
-        dig_tile_at(14, 5);
-        auto stone_extra2 = std::make_unique<stone>(801, stone_black_tex, stone::color_black);
-        stone_extra2->set_grid_position(14, 5);
-        add_entity(std::move(stone_extra2));
-
-        // Near the y=10 ledge/wall
-        dig_tile_at(9, 9);
-        auto stone_extra3 = std::make_unique<stone>(802, stone_brown_tex, stone::color_brown);
-        stone_extra3->set_grid_position(9, 9);
-        add_entity(std::move(stone_extra3));
-
-        dig_tile_at(12, 9);
-        auto stone_extra4 = std::make_unique<stone>(803, stone_black_tex, stone::color_black);
-        stone_extra4->set_grid_position(12, 9);
-        add_entity(std::move(stone_extra4));
-
-        // Mummy corridor area
-        dig_tile_at(3, 18);
-        auto stone_extra5 = std::make_unique<stone>(804, stone_grey_tex, stone::color_grey);
-        stone_extra5->set_grid_position(3, 18);
-        add_entity(std::move(stone_extra5));
-
-        dig_tile_at(7, 18);
-        auto stone_extra6 = std::make_unique<stone>(805, stone_brown_tex, stone::color_brown);
-        stone_extra6->set_grid_position(7, 18);
-        add_entity(std::move(stone_extra6));
-
-        // Dragon patrol path
-        dig_tile_at(11, 21);
-        auto stone_extra7 = std::make_unique<stone>(806, stone_grey_tex, stone::color_grey);
-        stone_extra7->set_grid_position(11, 21);
-        add_entity(std::move(stone_extra7));
-
-        dig_tile_at(30, 21);
-        auto stone_extra8 = std::make_unique<stone>(807, stone_black_tex, stone::color_black);
-        stone_extra8->set_grid_position(30, 21);
-        add_entity(std::move(stone_extra8));
-
-        // Place items
-        // Pickaxes
-        auto p1 = std::make_unique<pickaxe>(8, pickaxe_tex);
-        p1->set_grid_position(3, 3);
-        add_entity(std::move(p1));
-
-        auto p2 = std::make_unique<pickaxe>(108, pickaxe_tex);
-        p2->set_grid_position(32, 3);
-        add_entity(std::move(p2));
-
-        auto p3 = std::make_unique<pickaxe>(109, pickaxe_tex);
-        p3->set_grid_position(2, 28);
-        add_entity(std::move(p3));
-
-        // Coins (12 in total, target is 8)
-        std::vector<std::pair<int, int>> coin_positions = {
-            {5, 5}, {6, 5},
-            {25, 4}, {26, 4}, {27, 4},
-            {15, 12}, {16, 12}, {17, 12},
-            {30, 20}, {31, 20},
-            {5, 30}, {6, 30}
-        };
-        uint32_t coin_net_id = 300;
-        for (const auto& pos : coin_positions)
-        {
-            auto coin = std::make_unique<gold_coin>(coin_net_id++, coint_text);
-            coin->set_grid_position(pos.first, pos.second);
-            add_entity(std::move(coin));
-        }
-        m_target_gold = 8;
-
-        m_mummy_triggers.clear();
-        m_mummy_triggers.push_back({26, 4, false, 0});
-        m_mummy_triggers.push_back({17, 12, false, 0});
-        m_mummy_triggers.push_back({5, 30, false, 0});
-        m_next_dynamic_mummy_id = 5000;
-
-        // Diamonds (8 in total)
-        std::vector<std::pair<int, int>> diamond_positions = {
-            {10, 3}, {11, 3},
-            {26, 7}, {27, 7},
-            {5, 12},
-            {20, 22}, {21, 22},
-            {15, 31}
-        };
-        uint32_t diamond_net_id = 400;
-        const zwodee::texture* blink_tex_ptr = m_blink_tex ? m_blink_tex.get() : fallback_tex_ptr;
-        for (const auto& pos : diamond_positions)
-        {
-            auto d = std::make_unique<diamond>(diamond_net_id++, get_random_diamond_texture(), blink_tex_ptr);
-            d->set_level(this);
-            d->set_grid_position(pos.first, pos.second);
-            add_entity(std::move(d));
-        }
-
-        // Garlic bulbs
-        std::vector<std::pair<int, int>> garlic_positions = {
-            {7, 3}, {28, 6}, {12, 11}, {25, 30}
-        };
-        uint32_t garlic_net_id = 500;
-        for (const auto& pos : garlic_positions)
-        {
-            auto g = std::make_unique<garlic_bulb>(garlic_net_id++, garlic_tex);
-            g->set_grid_position(pos.first, pos.second);
-            add_entity(std::move(g));
-        }
-
-        // Onion bulbs
-        std::vector<std::pair<int, int>> onion_positions = {
-            {8, 3}, {29, 6}, {13, 11}, {26, 30}
-        };
-        uint32_t onion_net_id = 600;
-        for (const auto& pos : onion_positions)
-        {
-            auto o = std::make_unique<onion_bulb>(onion_net_id++, onion_tex);
-            o->set_grid_position(pos.first, pos.second);
-            add_entity(std::move(o));
-        }
-
-        // Lamps (3 in total)
-        std::vector<std::pair<int, int>> lamp_positions = {
-            {12, 3}, {14, 12}, {28, 28}
-        };
-        uint32_t lamp_net_id = 700;
-        for (const auto& pos : lamp_positions)
-        {
-            auto l = std::make_unique<lamp>(lamp_net_id++, lamp_tex);
-            l->set_grid_position(pos.first, pos.second);
-            add_entity(std::move(l));
-        }
-
-        // Spawn Enemies and dig their corridors
-        // Vampire at (15, 6)
-        for (int y = 5; y <= 7; ++y)
-            for (int x = 14; x <= 16; ++x)
+        // Dig a pocket for Soldier 1 (Stage 1 Left)
+        for (int y = 7; y <= 9; ++y)
+            for (int x = 4; x <= 8; ++x)
                 dig_tile_at(x, y);
+
+        // Dig a pocket for Soldier 2 (Stage 1 Right)
+        for (int y = 7; y <= 9; ++y)
+            for (int x = 26; x <= 30; ++x)
+                dig_tile_at(x, y);
+
+        // Puzzle 2 (Opening Barrier at y=14):
+        // Place two stone-mid blocks with a 1-tile gap (at y=10 and y=12).
+        // Digging them out will drop them on each other and blow up the y=14 barrier!
+        dig_tile_at(17, 10);
+        auto puzzle2_stone1 = std::make_unique<stone>(812, stone_mid_tex, stone::color_mid);
+        puzzle2_stone1->set_grid_position(17, 10);
+        add_entity(std::move(puzzle2_stone1));
+
+        dig_tile_at(17, 12);
+        auto puzzle2_stone2 = std::make_unique<stone>(813, stone_mid_tex, stone::color_mid);
+        puzzle2_stone2->set_grid_position(17, 12);
+        add_entity(std::move(puzzle2_stone2));
+
+        // Place sleeping vampire guarding the tunnel entrance in Stage 2
+        dig_tile_at(17, 17);
         const zwodee::texture* sleeping_tex_ptr = m_vampire_sleeping_tex ? m_vampire_sleeping_tex.get() : fallback_tex_ptr;
         const zwodee::texture* triggered_tex_ptr = m_vampire_triggered_tex ? m_vampire_triggered_tex.get() : fallback_tex_ptr;
         auto v1 = std::make_unique<vampire>(9, sleeping_tex_ptr, triggered_tex_ptr);
-        v1->set_grid_position(15, 6);
+        v1->set_grid_position(17, 17);
         add_entity(std::move(v1));
 
-        // Soldier patrolling top-right
-        for (int y = 6; y <= 9; ++y)
-            for (int x = 26; x <= 32; ++x)
-                dig_tile_at(x, y);
-        const zwodee::texture* soldier_front = m_soldier_front_tex ? m_soldier_front_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* soldier_back = m_soldier_back_tex ? m_soldier_back_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* soldier_side = m_soldier_side_tex ? m_soldier_side_tex.get() : fallback_tex_ptr;
-        auto s1 = std::make_unique<soldier>(10, soldier_front, soldier_back, soldier_side);
-        s1->set_grid_position(28, 8);
-        add_entity(std::move(s1));
+        // Puzzle 3 (Opening Barrier at y=24):
+        // Place two stone-high blocks with a 1-tile gap (at y=20 and y=22).
+        // Digging them triggers a massive explosion to clear the dragon cavern barrier!
+        dig_tile_at(17, 20);
+        auto puzzle3_stone1 = std::make_unique<stone>(814, stone_high_tex, stone::color_high);
+        puzzle3_stone1->set_grid_position(17, 20);
+        add_entity(std::move(puzzle3_stone1));
 
-        // Mummy corridor at bottom-left
-        for (int y = 18; y <= 22; ++y)
-            for (int x = 3; x <= 7; ++x)
+        dig_tile_at(17, 22);
+        auto puzzle3_stone2 = std::make_unique<stone>(815, stone_high_tex, stone::color_high);
+        puzzle3_stone2->set_grid_position(17, 22);
+        add_entity(std::move(puzzle3_stone2));
+
+        // Stage 4 (Dragons):
+        // Dig horizontal corridors for dragon patrols
+        for (int y = 27; y <= 28; ++y)
+            for (int x = 5; x <= 31; ++x)
                 dig_tile_at(x, y);
 
-        // Dragon 1 patrol path (horizontal corridor)
-        for (int y = 20; y <= 21; ++y)
-            for (int x = 11; x <= 30; ++x)
+        for (int y = 29; y <= 30; ++y)
+            for (int x = 5; x <= 31; ++x)
                 dig_tile_at(x, y);
+
+        // Dragon patrol entities
         auto get_random_dragon_tex = [this, fallback_tex_ptr]() -> const zwodee::texture* {
             if (std::rand() % 2 == 0)
             {
@@ -1378,31 +1353,130 @@ namespace digx
         };
 
         auto dr1 = std::make_unique<dragon>(12, get_random_dragon_tex());
-        dr1->set_grid_position(12, 20);
+        dr1->set_grid_position(6, 27);
         add_entity(std::move(dr1));
 
-        // Dragon 2 patrol path (horizontal corridor)
-        for (int y = 24; y <= 25; ++y)
-            for (int x = 11; x <= 30; ++x)
-                dig_tile_at(x, y);
         auto dr2 = std::make_unique<dragon>(112, get_random_dragon_tex());
-        dr2->set_grid_position(15, 24);
+        dr2->set_grid_position(28, 29);
         add_entity(std::move(dr2));
 
-        // Dragon 3 patrol path (horizontal corridor)
-        for (int y = 28; y <= 29; ++y)
-            for (int x = 11; x <= 30; ++x)
-                dig_tile_at(x, y);
-        auto dr3 = std::make_unique<dragon>(113, get_random_dragon_tex());
-        dr3->set_grid_position(18, 28);
-        add_entity(std::move(dr3));
+        // Dig tunnel from Stage 4 to exit door at bottom
+        for (int y = 31; y <= 33; ++y)
+        {
+            dig_tile_at(17, y);
+        }
 
-        // Add exit door at bottom right
-        dig_tile_at(32, 32);
+        // Place items
+        // Pickaxes (Plenty of pickaxes near spawn for testing, shifted to prevent overlaps)
+        auto p1 = std::make_unique<pickaxe>(8, pickaxe_tex);
+        p1->set_grid_position(16, 2);
+        add_entity(std::move(p1));
+
+        auto p2 = std::make_unique<pickaxe>(108, pickaxe_tex);
+        p2->set_grid_position(15, 3);
+        add_entity(std::move(p2));
+
+        auto p3 = std::make_unique<pickaxe>(109, pickaxe_tex);
+        p3->set_grid_position(3, 8);
+        add_entity(std::move(p3));
+
+        // Coins (12 in total, target is 8)
+        std::vector<std::pair<int, int>> coin_positions = {
+            {5, 7}, {30, 7}, // Side rooms Stage 1
+            {17, 16},        // Behind Vampire
+            {11, 13}, {23, 13}, // Vampire side chambers (shifted away from y=14 static stones)
+            {12, 22}, {22, 22}, // Mummy chambers
+            {17, 25},
+            {4, 28}, {30, 28}, // Dragon corridors
+            {16, 32}, {18, 32} // Exit room
+        };
+        uint32_t coin_net_id = 300;
+        for (const auto& pos : coin_positions)
+        {
+            auto coin = std::make_unique<gold_coin>(coin_net_id++, coint_text);
+            coin->set_grid_position(pos.first, pos.second);
+            add_entity(std::move(coin));
+        }
+        m_target_gold = 8;
+
+        // Mummy triggers
+        m_mummy_triggers.clear();
+        m_mummy_triggers.push_back({12, 21, false, 0});
+        m_mummy_triggers.push_back({22, 21, false, 0});
+        m_mummy_triggers.push_back({17, 25, false, 0}); // Shifted away from y=24 static stones
+        m_next_dynamic_mummy_id = 5000;
+
+        // Diamonds (8 in total)
+        std::vector<std::pair<int, int>> diamond_positions = {
+            {6, 7}, {28, 7},
+            {10, 13}, {24, 13}, // Shifted away from y=14 static stones
+            {13, 23}, {21, 23},
+            {10, 30}, {24, 30}
+        };
+        uint32_t diamond_net_id = 400;
+        const zwodee::texture* blink_tex_ptr = m_blink_tex ? m_blink_tex.get() : fallback_tex_ptr;
+        for (const auto& pos : diamond_positions)
+        {
+            auto d = std::make_unique<diamond>(diamond_net_id++, get_random_diamond_texture(), blink_tex_ptr);
+            d->set_level(this);
+            d->set_grid_position(pos.first, pos.second);
+            add_entity(std::move(d));
+        }
+
+        // Garlic bulbs (Placed close to spawn for immediate testing)
+        std::vector<std::pair<int, int>> garlic_positions = {
+            {16, 3}, {16, 4}, {13, 13}, {21, 13}, {17, 18}
+        };
+        uint32_t garlic_net_id = 500;
+        for (const auto& pos : garlic_positions)
+        {
+            auto g = std::make_unique<garlic_bulb>(garlic_net_id++, garlic_tex);
+            g->set_grid_position(pos.first, pos.second);
+            add_entity(std::move(g));
+        }
+
+        // Onion bulbs (Placed close to spawn for immediate testing)
+        std::vector<std::pair<int, int>> onion_positions = {
+            {18, 2}, {18, 3}, {2, 7}, {32, 7}, {17, 8} // Shifted away from y=6 static stones
+        };
+        uint32_t onion_net_id = 600;
+        for (const auto& pos : onion_positions)
+        {
+            auto o = std::make_unique<onion_bulb>(onion_net_id++, onion_tex);
+            o->set_grid_position(pos.first, pos.second);
+            add_entity(std::move(o));
+        }
+
+        // Lamps (Plenty of lamps near spawn)
+        std::vector<std::pair<int, int>> lamp_positions = {
+            {18, 4}, {16, 11}, {17, 28} // Shifted away from puzzle2_stone2 at (17, 12)
+        };
+        uint32_t lamp_net_id = 700;
+        for (const auto& pos : lamp_positions)
+        {
+            auto l = std::make_unique<lamp>(lamp_net_id++, lamp_tex);
+            l->set_grid_position(pos.first, pos.second);
+            add_entity(std::move(l));
+        }
+
+        // Soldiers patrolling Stage 1 side chambers
+        const zwodee::texture* soldier_front = m_soldier_front_tex ? m_soldier_front_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* soldier_back = m_soldier_back_tex ? m_soldier_back_tex.get() : fallback_tex_ptr;
+        const zwodee::texture* soldier_side = m_soldier_side_tex ? m_soldier_side_tex.get() : fallback_tex_ptr;
+
+        auto s1 = std::make_unique<soldier>(10, soldier_front, soldier_back, soldier_side);
+        s1->set_grid_position(5, 8);
+        add_entity(std::move(s1));
+
+        auto s2 = std::make_unique<soldier>(110, soldier_front, soldier_back, soldier_side);
+        s2->set_grid_position(29, 8);
+        add_entity(std::move(s2));
+
+        // Add exit door at bottom center
         auto door = std::make_unique<exit_door>(15, door_closed, door_open);
-        door->set_grid_position(32, 32);
-        m_exit_x = 32.0f * 32.0f;
-        m_exit_y = 32.0f * 32.0f;
+        door->set_grid_position(17, 33);
+        m_exit_x = 17.0f * 32.0f;
+        m_exit_y = 33.0f * 32.0f;
         add_entity(std::move(door));
     }
 
@@ -1417,6 +1491,12 @@ namespace digx
         m_lamp_timer = 0.0f;
         m_target_gold = 0;
         m_current_darkness = 1.0f;
+        m_game_over = false;
+        m_death_sequence_ticks = -1;
+        m_game_over_selected_index = 0;
+        m_fart_effect_ticks = 0;
+        m_fart_x = 0.0f;
+        m_fart_y = 0.0f;
 
         clear_level();
         load_demo_level(*m_engine);
@@ -1425,6 +1505,13 @@ namespace digx
     player* level::get_player() const
     {
         return m_player;
+    }
+
+    void level::trigger_fart_effect(float x, float y)
+    {
+        m_fart_effect_ticks = 128;
+        m_fart_x = x;
+        m_fart_y = y;
     }
 
     const zwodee::texture* level::get_random_diamond_texture() const
@@ -1469,7 +1556,7 @@ namespace digx
         }
     }
 
-    void level::explode_stone(stone* st)
+    void level::explode_stone(stone* st, int custom_radius)
     {
         if (!st || st->is_dead()) return;
 
@@ -1484,17 +1571,17 @@ namespace digx
         int sgx = static_cast<int>(std::round(st->get_x() / 32.0f));
         int sgy = static_cast<int>(std::round(st->get_y() / 32.0f));
 
-        int radius = st->get_explosion_radius(); // 0 for brown, 1 for grey, 2 for black
+        int radius = (custom_radius != -1) ? custom_radius : st->get_explosion_radius();
 
         int min_x = sgx;
         int max_x = sgx;
         int min_y = sgy;
         int max_y = sgy;
 
-        if (radius == 1) // Grey 2x2
+        if (radius == 1) // Grey 2x2 (centered/downward explosion to clear tiles below)
         {
-            min_x = sgx - 1; max_x = sgx;
-            min_y = sgy - 1; max_y = sgy;
+            min_x = sgx - 1; max_x = sgx + 1;
+            min_y = sgy;     max_y = sgy + 1;
         }
         else if (radius == 2) // Black 3x3
         {
@@ -1521,7 +1608,7 @@ namespace digx
         // Kill entities in the area (excluding items)
         for (const auto& ent : get_entities())
         {
-            if (ent.get() == st || ent->is_dead())
+            if (ent.get() == st || ent->is_dead() || dynamic_cast<vampire*>(ent.get()))
             {
                 continue;
             }
@@ -1544,6 +1631,17 @@ namespace digx
                 {
                     ent->take_damage(999);
                 }
+            }
+        }
+
+        // Kill player if caught in the explosion
+        if (m_player && !m_player->is_dead())
+        {
+            int pgx = static_cast<int>(std::round(m_player->get_x() / 32.0f));
+            int pgy = static_cast<int>(std::round(m_player->get_y() / 32.0f));
+            if (pgx >= min_x && pgx <= max_x && pgy >= min_y && pgy <= max_y)
+            {
+                m_player->take_damage(999);
             }
         }
     }
@@ -1584,6 +1682,24 @@ namespace digx
         {
             float px = m_player->get_x();
             float py = m_player->get_y();
+
+            if (m_player->is_dead())
+            {
+                zwodee::render_node dead_node;
+                dead_node.x = px;
+                dead_node.y = py;
+                dead_node.w = 32.0f;
+                dead_node.h = 32.0f;
+                dead_node.tex = m_player_dead_tex ? m_player_dead_tex.get() : m_fallback_tex.get();
+                dead_node.src_x = 0;
+                dead_node.src_y = 0;
+                dead_node.src_w = dead_node.tex->get_width();
+                dead_node.src_h = dead_node.tex->get_height();
+                dead_node.flip_horizontal = m_player->is_facing_left();
+                dead_node.flip_vertical = false;
+                dead_node.color_mod = 255;
+                snapshot.push_back(dead_node);
+            }
 
             // Horizontal page flipping based on active display width
             float page_width = static_cast<float>(display_w);
@@ -1688,11 +1804,61 @@ namespace digx
                 snapshot.push_back(footer_node);
             }
 
+            // Fart visual effect node
+            if (m_fart_effect_ticks > 0 && m_fart_tex)
+            {
+                float progress = 1.0f - (static_cast<float>(m_fart_effect_ticks) / 128.0f);
+                float alpha = 0.0f;
+                if (progress < 0.5f)
+                {
+                    alpha = progress * 2.0f;
+                }
+                else
+                {
+                    alpha = (1.0f - progress) * 2.0f;
+                }
+                uint8_t color_val = static_cast<uint8_t>(alpha * 255.0f);
+
+                zwodee::render_node fart_node{};
+                fart_node.x = m_fart_x;
+                fart_node.y = m_fart_y;
+                fart_node.w = 32.0f;
+                fart_node.h = 32.0f;
+                fart_node.tex = m_fart_tex.get();
+                fart_node.src_x = 0;
+                fart_node.src_y = 0;
+                fart_node.src_w = m_fart_tex->get_width();
+                fart_node.src_h = m_fart_tex->get_height();
+                fart_node.flip_horizontal = false;
+                fart_node.flip_vertical = false;
+                fart_node.is_ui = false;
+                fart_node.color_mod = color_val;
+                snapshot.push_back(fart_node);
+            }
+
             // Apply the camera offset to all rendering positions
             for (auto& node : snapshot)
             {
                 node.x -= camera_x;
                 node.y -= camera_y;
+            }
+
+            // Apply death sequence fade to the dead player texture
+            for (auto& node : snapshot)
+            {
+                if (node.tex == m_player_dead_tex.get())
+                {
+                    float fade = 1.0f;
+                    if (m_game_over)
+                    {
+                        fade = 0.0f;
+                    }
+                    else if (m_death_sequence_ticks >= 0)
+                    {
+                        fade = static_cast<float>(m_death_sequence_ticks) / 384.0f;
+                    }
+                    node.color_mod = static_cast<uint8_t>(fade * 255.0f);
+                }
             }
 
             // Layer sorting to render the door above digged tiles but beneath the player
@@ -1710,14 +1876,189 @@ namespace digx
                     if (node.tex == m_door_closed_tex.get() || node.tex == m_door_open_tex.get() ||
                         node.tex == m_dirt_breaking_texs[0].get() ||
                         node.tex == m_dirt_breaking_texs[1].get() ||
-                        node.tex == m_dirt_breaking_texs[2].get())
+                        node.tex == m_dirt_breaking_texs[2].get() ||
+                        (m_fart_tex && node.tex == m_fart_tex.get()) ||
+                        (m_vampire_sleeping_tex && node.tex == m_vampire_sleeping_tex.get()) ||
+                        (m_vampire_triggered_tex && node.tex == m_vampire_triggered_tex.get()))
                     {
                         return 2;
+                    }
+                    if (node.tex == m_player_dead_tex.get())
+                    {
+                        return 4;
                     }
                     return 3;
                 };
                 return get_layer(a) < get_layer(b);
             });
+        }
+
+        // Draw HUD overlay (Top Left and Top Right)
+        if (m_font && m_player)
+        {
+            float screen_w = static_cast<float>(display_w);
+            float font_scale = 0.28f;
+            float bg_y = 0.0f;
+            float bg_h = 32.0f;
+            float text_y = 22.0f;
+            float icon_y = 6.0f;
+            float icon_sz = 20.0f;
+
+            // Structure to hold nodes temporarily so we can render the background underneath them
+            struct hud_item {
+                const zwodee::texture* tex = nullptr;
+                float x = 0.0f;
+                float w = 0.0f;
+                std::string text;
+            };
+
+            // Calculate left elements content
+            float tx = 8.0f; // Padding from left edge of screen
+
+            // We can pre-calculate the positions and widths
+            std::vector<hud_item> left_items;
+            
+            // Onion
+            left_items.push_back({m_onion_tex.get(), tx, icon_sz, ": " + std::to_string(m_player->get_onion_count()) + "    "});
+            tx += icon_sz + 4.0f;
+            float o_w = 0.0f;
+            for (char c : left_items.back().text) o_w += m_font->get_glyph(c).xadvance * font_scale;
+            tx += o_w;
+
+            // Garlic
+            left_items.push_back({m_garlic_tex.get(), tx, icon_sz, ": " + std::to_string(m_player->get_garlic_count()) + "    "});
+            tx += icon_sz + 4.0f;
+            float g_w = 0.0f;
+            for (char c : left_items.back().text) g_w += m_font->get_glyph(c).xadvance * font_scale;
+            tx += g_w;
+
+            // Coin
+            left_items.push_back({m_coin_tex.get(), tx, icon_sz, ": " + std::to_string(m_player->get_gold_count())});
+            tx += icon_sz + 4.0f;
+            float c_w = 0.0f;
+            for (char c : left_items.back().text) c_w += m_font->get_glyph(c).xadvance * font_scale;
+            tx += c_w;
+
+            float left_panel_w = tx + 8.0f; // Padding at end of left panel
+
+            // Calculate right elements content
+            std::string right_str = "Score: " + std::to_string(m_player->get_score()) + "  |  Level " + std::to_string(m_level_number);
+            float right_w = 0.0f;
+            for (char c : right_str)
+            {
+                right_w += m_font->get_glyph(c).xadvance * font_scale;
+            }
+            float right_panel_w = right_w + 16.0f; // 8px padding on each side
+            float right_panel_x = screen_w - right_panel_w;
+            float right_text_x = right_panel_x + 8.0f;
+
+            // 1. Draw Left Panel Background Node (flush with left edge, x=0)
+            zwodee::render_node bg_left{};
+            bg_left.x = 0.0f;
+            bg_left.y = bg_y;
+            bg_left.w = left_panel_w;
+            bg_left.h = bg_h;
+            bg_left.tex = nullptr;
+            bg_left.is_ui = true;
+            bg_left.r = 0; bg_left.g = 0; bg_left.b = 0; bg_left.a = 128; // 50% opacity
+            snapshot.push_back(bg_left);
+
+            // 2. Draw Right Panel Background Node (flush with right edge)
+            zwodee::render_node bg_right{};
+            bg_right.x = right_panel_x;
+            bg_right.y = bg_y;
+            bg_right.w = right_panel_w;
+            bg_right.h = bg_h;
+            bg_right.tex = nullptr;
+            bg_right.is_ui = true;
+            bg_right.r = 0; bg_right.g = 0; bg_right.b = 0; bg_right.a = 128; // 50% opacity
+            snapshot.push_back(bg_right);
+
+            // Helpers to draw icon and text
+            auto draw_hud_icon = [&](const zwodee::texture* tex, float x) {
+                if (!tex) return;
+                zwodee::render_node icon_node{};
+                icon_node.x = x;
+                icon_node.y = icon_y;
+                icon_node.w = icon_sz;
+                icon_node.h = icon_sz;
+                icon_node.tex = tex;
+                icon_node.src_x = 0;
+                icon_node.src_y = 0;
+                icon_node.src_w = tex->get_width();
+                icon_node.src_h = tex->get_height();
+                icon_node.flip_horizontal = false;
+                icon_node.flip_vertical = false;
+                icon_node.is_ui = true;
+                icon_node.color_mod = 255;
+                snapshot.push_back(icon_node);
+            };
+
+            auto draw_shadow_text = [&](const std::string& text, float x) {
+                // Shadow
+                auto shadow_nodes = m_font->get_text_nodes(text, x + 1.0f, text_y + 1.0f, font_scale, 0, 0, 0, 255);
+                for (auto& node : shadow_nodes) node.is_ui = true;
+                snapshot.insert(snapshot.end(), shadow_nodes.begin(), shadow_nodes.end());
+
+                // Text
+                auto text_nodes = m_font->get_text_nodes(text, x, text_y, font_scale, 255, 255, 255, 255);
+                for (auto& node : text_nodes) node.is_ui = true;
+                snapshot.insert(snapshot.end(), text_nodes.begin(), text_nodes.end());
+            };
+
+            // 3. Draw Left Panel Content (drawn directly at their calculated x coordinates)
+            for (const auto& item : left_items)
+            {
+                draw_hud_icon(item.tex, item.x);
+                draw_shadow_text(item.text, item.x + icon_sz + 4.0f);
+            }
+
+            // 4. Draw Right Panel Content
+            draw_shadow_text(right_str, right_text_x);
+        }
+
+        // Append Game Over Menu overlay and buttons at the end of snapshot (renders on top, no camera offset)
+        if (m_game_over)
+        {
+            float screen_w = static_cast<float>(display_w);
+            float screen_h = static_cast<float>(display_h);
+
+            // 1. Semi-transparent black-red overlay with blur effect
+            zwodee::render_node overlay_node{};
+            overlay_node.x = 0.0f;
+            overlay_node.y = 0.0f;
+            overlay_node.w = screen_w;
+            overlay_node.h = screen_h;
+            overlay_node.tex = nullptr;
+            overlay_node.is_ui = true;
+            overlay_node.is_blur = true;
+            overlay_node.r = 64; overlay_node.g = 0; overlay_node.b = 0; overlay_node.a = 160; // Dark red overlay
+            snapshot.push_back(overlay_node);
+
+            // 2. "GAME OVER" Title Text
+            if (m_font)
+            {
+                std::string game_over_text = "GAME OVER";
+                float text_scale = 0.8f;
+                float text_w = 0.0f;
+                for (char c : game_over_text)
+                {
+                    text_w += m_font->get_glyph(c).xadvance * text_scale;
+                }
+                float tx = (screen_w - text_w) * 0.5f;
+                std::vector<zwodee::render_node> text_nodes = m_font->get_text_nodes(game_over_text, tx, 150.0f, text_scale, 255, 50, 50, 255);
+                for (auto& node : text_nodes)
+                {
+                    node.is_ui = true;
+                }
+                snapshot.insert(snapshot.end(), text_nodes.begin(), text_nodes.end());
+
+                // 3. Render Buttons
+                for (size_t i = 0; i < m_game_over_buttons.size(); ++i)
+                {
+                    m_game_over_buttons[i].add_to_snapshot(snapshot, *m_font, m_game_over_selected_index == static_cast<int>(i));
+                }
+            }
         }
 
         // Append Pause Menu overlay and buttons at the end of snapshot (renders on top, no camera offset)

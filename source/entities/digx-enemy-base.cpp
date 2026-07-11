@@ -93,121 +93,50 @@ namespace digx
         float gx = std::round(m_x / 32.0f);
         float gy = std::round(m_y / 32.0f);
 
-        if (!m_has_lock)
+        int py = static_cast<int>(std::round(player->get_y() / 32.0f));
+        int ey = static_cast<int>(gy);
+
+        // If player's Y is further than 5 tiles away, align Y to get closer
+        if (std::abs(py - ey) > 5)
         {
-            m_lock_x = std::round(player->get_x() / 32.0f) * 32.0f;
-            m_lock_y = std::round(player->get_y() / 32.0f) * 32.0f;
-            m_has_lock = true;
-        }
-
-        float lgx = std::round(m_lock_x / 32.0f);
-        float lgy = std::round(m_lock_y / 32.0f);
-
-        if (gx == lgx && gy == lgy)
-        {
-            m_lock_x = std::round(player->get_x() / 32.0f) * 32.0f;
-            m_lock_y = std::round(player->get_y() / 32.0f) * 32.0f;
-            lgx = std::round(m_lock_x / 32.0f);
-            lgy = std::round(m_lock_y / 32.0f);
-        }
-
-        if (gx == lgx && gy == lgy)
-        {
-            return;
-        }
-
-        int start_x = static_cast<int>(gx);
-        int start_y = static_cast<int>(gy);
-        int end_x = static_cast<int>(lgx);
-        int end_y = static_cast<int>(lgy);
-
-        // BFS to find the shortest path from start grid to lock grid
-        std::queue<std::pair<int, int>> q;
-        std::vector<std::vector<std::pair<int, int>>> parent(lvl->get_height(), std::vector<std::pair<int, int>>(lvl->get_width(), {-1, -1}));
-        std::vector<std::vector<bool>> visited(lvl->get_height(), std::vector<bool>(lvl->get_width(), false));
-
-        q.push({start_x, start_y});
-        visited[start_y][start_x] = true;
-
-        bool found = false;
-        std::pair<int, int> dirs[] = { {1, 0}, {-1, 0}, {0, 1}, {0, -1} };
-
-        while (!q.empty())
-        {
-            auto curr = q.front();
-            q.pop();
-
-            if (curr.first == end_x && curr.second == end_y)
+            float dir_y = (py > ey) ? 1.0f : -1.0f;
+            if (is_direction_clear(lvl, 0.0f, dir_y))
             {
-                found = true;
-                break;
-            }
-
-            for (const auto& d : dirs)
-            {
-                int nx = curr.first + d.first;
-                int ny = curr.second + d.second;
-
-                if (nx >= 0 && nx < static_cast<int>(lvl->get_width()) &&
-                    ny >= 0 && ny < static_cast<int>(lvl->get_height()))
-                {
-                    if (!visited[ny][nx] && check_tile_clear(lvl, nx, ny))
-                    {
-                        visited[ny][nx] = true;
-                        parent[ny][nx] = curr;
-                        q.push({nx, ny});
-                    }
-                }
+                m_dir_x = 0.0f;
+                m_dir_y = dir_y;
+                m_target_x = m_x;
+                m_target_y = (gy + dir_y) * 32.0f;
+                m_is_moving = true;
+                return;
             }
         }
 
-        float step_x = 0.0f;
-        float step_y = 0.0f;
-
-        if (found)
+        // Gather all clear horizontal and vertical directions for random wandering patrol
+        std::vector<std::pair<float, float>> clear_dirs;
+        std::pair<float, float> dirs[] = { {1.0f, 0.0f}, {-1.0f, 0.0f}, {0.0f, 1.0f}, {0.0f, -1.0f} };
+        for (const auto& d : dirs)
         {
-            // Backtrack to find the first step towards the target
-            std::pair<int, int> curr = {end_x, end_y};
-            while (parent[curr.second][curr.first] != std::make_pair(start_x, start_y))
+            if (is_direction_clear(lvl, d.first, d.second))
             {
-                curr = parent[curr.second][curr.first];
+                clear_dirs.push_back(d);
             }
-            step_x = static_cast<float>(curr.first - start_x);
-            step_y = static_cast<float>(curr.second - start_y);
+        }
+
+        if (!clear_dirs.empty())
+        {
+            // Pick a direction randomly among all clear choices on each tile step
+            auto chosen_dir = clear_dirs[std::rand() % clear_dirs.size()];
+            m_dir_x = chosen_dir.first;
+            m_dir_y = chosen_dir.second;
+            m_target_x = (gx + m_dir_x) * 32.0f;
+            m_target_y = (gy + m_dir_y) * 32.0f;
+            m_is_moving = true;
         }
         else
         {
-            // No direct path found: Wander to a random adjacent clear tile
-            std::vector<std::pair<float, float>> clear_dirs;
-            for (const auto& d : dirs)
-            {
-                if (check_tile_clear(lvl, start_x + d.first, start_y + d.second))
-                {
-                    clear_dirs.push_back({static_cast<float>(d.first), static_cast<float>(d.second)});
-                }
-            }
-
-            if (!clear_dirs.empty())
-            {
-                int rand_idx = std::rand() % clear_dirs.size();
-                step_x = clear_dirs[rand_idx].first;
-                step_y = clear_dirs[rand_idx].second;
-                // Re-lock next step
-                m_has_lock = false;
-            }
+            m_dir_x = 0.0f;
+            m_dir_y = 0.0f;
         }
-
-        if (step_x == 0.0f && step_y == 0.0f)
-        {
-            // Fully trapped: stay idle
-            return;
-        }
-
-        m_dir_x = step_x;
-        m_dir_y = step_y;
-        m_target_x = (gx + step_x) * 32.0f;
-        m_target_y = (gy + step_y) * 32.0f;
-        m_is_moving = true;
     }
 
     bool enemy_base::is_direction_clear(level* lvl, float dir_x, float dir_y) const

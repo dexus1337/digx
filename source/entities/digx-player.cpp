@@ -56,6 +56,15 @@ namespace digx
 
     void player::tick()
     {
+        if (is_dead())
+        {
+            m_vx = 0.0f;
+            m_vy = 0.0f;
+            m_is_moving = false;
+            zwodee::entity_player::tick();
+            return;
+        }
+
         if (!m_initialized_grid)
         {
             m_target_x = m_x;
@@ -74,19 +83,42 @@ namespace digx
 
         if (m_current_input.is_down(zwodee::input_state::action_1))
         {
-            if (m_garlic_count > 0 && m_fart_cooldown == 0)
+            if (m_onion_count > 0 && m_fart_cooldown == 0)
             {
-                m_garlic_count--;
+                m_onion_count--;
                 m_fart_cooldown = 128 * 3;
+
+                // Play a random fart sound from fart-1 to fart-5 and chew sound
+                if (m_audio)
+                {
+                    m_audio->play_sound("onion_chew");
+                    int rand_idx = (std::rand() % 5) + 1;
+                    m_audio->play_sound("fart-" + std::to_string(rand_idx));
+                }
+
+                // Trigger fart visual effect in level
+                if (m_level)
+                {
+                    if (auto* digx_lvl = dynamic_cast<digx::level*>(m_level))
+                    {
+                        digx_lvl->trigger_fart_effect(m_x, m_y);
+                    }
+                }
             }
         }
 
         if (m_current_input.is_down(zwodee::input_state::action_2))
         {
-            if (m_onion_count > 0 && m_breath_cooldown == 0)
+            if (m_garlic_count > 0 && m_breath_cooldown == 0)
             {
-                m_onion_count--;
+                m_garlic_count--;
                 m_breath_cooldown = 128 * 5;
+
+                // Play garlic chew sound
+                if (m_audio)
+                {
+                    m_audio->play_sound("garlic_chew");
+                }
             }
         }
 
@@ -759,7 +791,7 @@ namespace digx
 
         if (auto* st = get_stone_at(next_target_x, next_target_y))
         {
-            if (dir_y != 0.0f)
+            if (dir_y != 0.0f || st->is_moving() || st->is_falling() || st->get_wiggle_ticks() > 0)
             {
                 return false;
             }

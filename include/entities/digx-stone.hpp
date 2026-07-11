@@ -17,9 +17,9 @@ namespace digx
     public:
         enum stone_color : uint8_t
         {
-            color_black,
-            color_grey,
-            color_brown
+            color_high,
+            color_mid,
+            color_low
         };
 
         stone(uint32_t network_id, const zwodee::texture* tex, stone_color col);
@@ -46,13 +46,14 @@ namespace digx
         void clear_pushed();
 
     private:
-        stone_color m_color = color_black;
+        stone_color m_color = color_high;
         bool m_is_falling = false;
         float m_fall_speed = 2.0f;
 
         bool m_is_moving = false;
         bool m_was_pushed = false;
         int m_wiggle_ticks = 0;
+        int m_fall_ticks = 0;
         float m_target_x = 0.0f;
         float m_target_y = 0.0f;
         float m_dir_x = 0.0f;

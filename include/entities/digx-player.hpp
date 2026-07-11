@@ -56,6 +56,7 @@ namespace digx
         [[nodiscard]] int get_digging_ticks_remaining() const { return m_digging_ticks_remaining; }
         [[nodiscard]] float get_target_x() const { return m_target_x; }
         [[nodiscard]] float get_target_y() const { return m_target_y; }
+        [[nodiscard]] bool is_facing_left() const { return m_facing_left; }
         
         void set_digging_textures(
             const zwodee::texture* shovel_dig_1, const zwodee::texture* shovel_dig_2,

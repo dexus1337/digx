@@ -39,7 +39,8 @@ namespace digx
         [[nodiscard]] const zwodee::texture* get_random_diamond_texture() const;
         [[nodiscard]] bool is_tile_digged(int gx, int gy) const;
         void dig_tile(int gx, int gy);
-        void explode_stone(class stone* st);
+        void explode_stone(class stone* st, int custom_radius = -1);
+        void trigger_fart_effect(float x, float y);
 
     private:
         player* m_player = nullptr;
@@ -65,9 +66,9 @@ namespace digx
         std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_pickaxe_tex;
         std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_pickaxe_up_tex;
         std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_pickaxe_down_tex;
-        std::shared_ptr<zwodee::texture> m_stone_black_tex;
-        std::shared_ptr<zwodee::texture> m_stone_grey_tex;
-        std::shared_ptr<zwodee::texture> m_stone_brown_tex;
+        std::shared_ptr<zwodee::texture> m_stone_high_tex;
+        std::shared_ptr<zwodee::texture> m_stone_low_tex;
+        std::shared_ptr<zwodee::texture> m_stone_mid_tex;
         std::shared_ptr<zwodee::texture> m_pickaxe_tex;
         std::shared_ptr<zwodee::texture> m_coin_tex;
         std::shared_ptr<zwodee::texture> m_door_closed_tex;
@@ -85,6 +86,8 @@ namespace digx
         // Preloaded enemy textures
         std::shared_ptr<zwodee::texture> m_vampire_sleeping_tex;
         std::shared_ptr<zwodee::texture> m_vampire_triggered_tex;
+        std::shared_ptr<zwodee::texture> m_player_dead_tex;
+        std::shared_ptr<zwodee::texture> m_fart_tex;
         std::shared_ptr<zwodee::texture> m_soldier_tex;
         std::shared_ptr<zwodee::texture> m_soldier_front_tex;
         std::shared_ptr<zwodee::texture> m_soldier_back_tex;
@@ -124,6 +127,11 @@ namespace digx
         std::vector<spawn_trigger_tile> m_mummy_triggers;
         uint32_t m_next_dynamic_mummy_id = 5000;
 
+        // Fart visual effect tracking
+        int m_fart_effect_ticks = 0;
+        float m_fart_x = 0.0f;
+        float m_fart_y = 0.0f;
+
         // Pause state members
         bool m_is_paused = false;
         bool m_in_settings = false;
@@ -132,5 +140,11 @@ namespace digx
         zwodee::input_state m_current_input{};
         std::unique_ptr<zwodee::font> m_font;
         std::vector<button> m_pause_buttons;
+
+        // Game Over state members
+        bool m_game_over = false;
+        int m_death_sequence_ticks = -1;
+        std::vector<button> m_game_over_buttons;
+        int m_game_over_selected_index = 0;
     };
 }
