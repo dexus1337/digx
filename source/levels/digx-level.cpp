@@ -1875,6 +1875,18 @@ namespace digx
     {
         m_persisted_state = state;
         m_has_persisted_state = true;
+        
+        if (m_player)
+        {
+            m_player->apply_persistent_state
+            (
+                m_persisted_state.score,
+                m_persisted_state.diamonds,
+                m_persisted_state.garlic,
+                m_persisted_state.onion,
+                m_persisted_state.has_pickaxe
+            );
+        }
     }
 
     void level::advance_to_next_level()
