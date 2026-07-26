@@ -1,13 +1,15 @@
 #include "entities/digx-dragon.hpp"
 #include "entities/digx-player.hpp"
 #include "levels/digx-level.hpp"
+#include "assets/texture-cache.hpp"
 
 #include <cmath>
+#include <cstdlib>
 
 namespace digx
 {
-    dragon::dragon(uint32_t network_id, const zwodee::texture* tex)
-        : zwodee::entity(network_id, tex, 999999)
+    dragon::dragon(uint32_t network_id)
+        : zwodee::entity(network_id, (std::rand() % 2 == 0) ? texture_cache::get().dragon_red_tex.get() : texture_cache::get().dragon_green_tex.get(), 999999)
     {
         // 3x2 grid size (96x64 pixels)
         m_width = 96.0f;

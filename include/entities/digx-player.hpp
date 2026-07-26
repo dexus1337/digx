@@ -15,16 +15,7 @@ namespace digx
     class player : public zwodee::entity_player
     {
     public:
-        player(uint32_t network_id, 
-               const zwodee::texture* shovel_idle_tex, 
-               const zwodee::texture* shovel_running_tex, 
-               const zwodee::texture* shovel_running_up_tex,
-               const zwodee::texture* shovel_running_down_tex,
-               const zwodee::texture* pickaxe_idle_tex, 
-               const zwodee::texture* pickaxe_running_tex, 
-               const zwodee::texture* pickaxe_running_up_tex,
-               const zwodee::texture* pickaxe_running_down_tex,
-               zwodee::audio_manager* audio);
+        player(uint32_t network_id, zwodee::audio_manager* audio);
 
         void tick() override;
 
@@ -38,43 +29,29 @@ namespace digx
         void obtain_pickaxe();
         void respawn(float x, float y);
 
-        [[nodiscard]] int get_gold_count() const;
-        [[nodiscard]] int get_diamond_count() const;
-        [[nodiscard]] int get_garlic_count() const;
-        [[nodiscard]] int get_onion_count() const;
-        [[nodiscard]] bool has_pickaxe() const;
-        [[nodiscard]] int get_score() const;
+        void apply_persistent_state(int score, int diamonds, int garlic, int onion, bool pickaxe);
 
-        [[nodiscard]] float get_fart_active_time() const;
-        [[nodiscard]] float get_breath_active_time() const;
+        int get_gold_count() const;
+        int get_diamond_count() const;
+        int get_garlic_count() const;
+        int get_onion_count() const;
+        bool has_pickaxe() const;
+        int get_score() const;
+
+        float get_fart_active_time() const;
+        float get_breath_active_time() const;
 
         void set_grid_bounds(int cols, int rows);
         void set_level(zwodee::tile_level* lvl);
-        [[nodiscard]] zwodee::tile_level* get_level() const;
-        [[nodiscard]] zwodee::audio_manager* get_audio_manager() const;
-        [[nodiscard]] bool is_digging() const { return m_is_digging; }
-        [[nodiscard]] int get_digging_ticks_remaining() const { return m_digging_ticks_remaining; }
-        [[nodiscard]] float get_target_x() const { return m_target_x; }
-        [[nodiscard]] float get_target_y() const { return m_target_y; }
-        [[nodiscard]] bool is_facing_left() const { return m_facing_left; }
+        zwodee::tile_level* get_level() const;
+        zwodee::audio_manager* get_audio_manager() const;
+        bool is_digging() const { return m_is_digging; }
+        int get_digging_ticks_remaining() const { return m_digging_ticks_remaining; }
+        float get_target_x() const { return m_target_x; }
+        float get_target_y() const { return m_target_y; }
+        bool is_facing_left() const { return m_facing_left; }
         
-        void set_digging_textures(
-            const zwodee::texture* shovel_dig_1, const zwodee::texture* shovel_dig_2,
-            const zwodee::texture* shovel_dig_up_1, const zwodee::texture* shovel_dig_up_2,
-            const zwodee::texture* shovel_dig_down_1, const zwodee::texture* shovel_dig_down_2,
-            const zwodee::texture* pickaxe_dig_1, const zwodee::texture* pickaxe_dig_2,
-            const zwodee::texture* pickaxe_dig_up_1, const zwodee::texture* pickaxe_dig_up_2,
-            const zwodee::texture* pickaxe_dig_down_1, const zwodee::texture* pickaxe_dig_down_2
-        );
 
-        void set_running_textures(
-            const zwodee::texture* shovel_run_1, const zwodee::texture* shovel_run_2,
-            const zwodee::texture* shovel_run_up_1, const zwodee::texture* shovel_run_up_2,
-            const zwodee::texture* shovel_run_down_1, const zwodee::texture* shovel_run_down_2,
-            const zwodee::texture* pickaxe_run_1, const zwodee::texture* pickaxe_run_2,
-            const zwodee::texture* pickaxe_run_up_1, const zwodee::texture* pickaxe_run_up_2,
-            const zwodee::texture* pickaxe_run_down_1, const zwodee::texture* pickaxe_run_down_2
-        );
 
     private:
         zwodee::tile_level* m_level = nullptr;
@@ -124,30 +101,7 @@ namespace digx
         bool m_has_queued_move = false;
         int m_queued_steps = 0;
 
-        const zwodee::texture* m_shovel_idle_tex = nullptr;
-        const zwodee::texture* m_shovel_running_tex = nullptr;
-        const zwodee::texture* m_shovel_running_up_tex = nullptr;
-        const zwodee::texture* m_shovel_running_down_tex = nullptr;
-        const zwodee::texture* m_pickaxe_idle_tex = nullptr;
-        const zwodee::texture* m_pickaxe_running_tex = nullptr;
-        const zwodee::texture* m_pickaxe_running_up_tex = nullptr;
-        const zwodee::texture* m_pickaxe_running_down_tex = nullptr;
-
-        const zwodee::texture* m_shovel_running_texs[2] = {nullptr, nullptr};
-        const zwodee::texture* m_shovel_running_up_texs[2] = {nullptr, nullptr};
-        const zwodee::texture* m_shovel_running_down_texs[2] = {nullptr, nullptr};
-        const zwodee::texture* m_pickaxe_running_texs[2] = {nullptr, nullptr};
-        const zwodee::texture* m_pickaxe_running_up_texs[2] = {nullptr, nullptr};
-        const zwodee::texture* m_pickaxe_running_down_texs[2] = {nullptr, nullptr};
-
         int m_run_anim_ticks = 0;
-        
-        const zwodee::texture* m_shovel_dig_texs[2] = {nullptr, nullptr};
-        const zwodee::texture* m_shovel_dig_up_texs[2] = {nullptr, nullptr};
-        const zwodee::texture* m_shovel_dig_down_texs[2] = {nullptr, nullptr};
-        const zwodee::texture* m_pickaxe_dig_texs[2] = {nullptr, nullptr};
-        const zwodee::texture* m_pickaxe_dig_up_texs[2] = {nullptr, nullptr};
-        const zwodee::texture* m_pickaxe_dig_down_texs[2] = {nullptr, nullptr};
         
         zwodee::audio_manager* m_audio = nullptr;
         bool m_facing_left = false;

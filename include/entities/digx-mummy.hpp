@@ -17,19 +17,16 @@ namespace digx
     class mummy : public enemy_base
     {
     public:
-        mummy(uint32_t network_id, const zwodee::texture* front, const zwodee::texture* back, const zwodee::texture* side);
+        mummy(uint32_t network_id);
 
         void tick() override;
 
         void update_behavior(player* player);
 
-        [[nodiscard]] bool is_spawned() const;
+        bool is_spawned() const;
         void trigger_spawn();
 
     private:
         bool m_is_spawned = false;
-        const zwodee::texture* m_front_tex = nullptr;
-        const zwodee::texture* m_back_tex = nullptr;
-        const zwodee::texture* m_side_tex = nullptr;
     };
 }

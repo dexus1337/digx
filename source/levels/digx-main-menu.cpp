@@ -58,12 +58,21 @@ namespace digx
         const auto& active_buttons = m_in_settings ? m_settings_buttons : m_main_buttons;
 
         // Hover detection
+        static float prev_mx = -1.0f;
+        static float prev_my = -1.0f;
+        bool mouse_moved = (mx != prev_mx || my != prev_my);
+        prev_mx = mx;
+        prev_my = my;
+
         bool hovered_any = false;
         for (size_t i = 0; i < active_buttons.size(); ++i)
         {
             if (active_buttons[i].is_hovered(mx, my))
             {
-                m_selected_index = static_cast<int>(i);
+                if (mouse_moved)
+                {
+                    m_selected_index = static_cast<int>(i);
+                }
                 hovered_any = true;
                 break;
             }
@@ -92,7 +101,7 @@ namespace digx
                     
                     // Create a clean demo level instance and register it
                     auto level = std::make_unique<digx::level>(35, 35);
-                    level->load_demo_level(m_engine);
+                    level->init(m_engine, "level1");
                     m_engine.get_level_manager().register_level("demo", std::move(level));
                     m_engine.get_level_manager().transition_to("demo");
                 }

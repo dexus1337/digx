@@ -18,7 +18,7 @@ namespace digx
         void set_player_input(const zwodee::input_state& input) override;
         void tick() override;
         void render(zwodee::renderer& target_renderer, double alpha) override;
-        [[nodiscard]] zwodee::render_snapshot get_render_snapshot(int display_w, int display_h) const override;
+        zwodee::render_snapshot get_render_snapshot(int display_w, int display_h) const override;
 
     private:
         zwodee::engine& m_engine;
@@ -38,7 +38,7 @@ namespace digx
         zwodee::input_state m_current_input{};
 
         // Check if key is pressed (was up, now down)
-        [[nodiscard]] bool is_key_pressed(zwodee::input_state::button_mask btn) const;
+        bool is_key_pressed(zwodee::input_state::button_mask btn) const;
         void update_button_layouts();
     };
 }

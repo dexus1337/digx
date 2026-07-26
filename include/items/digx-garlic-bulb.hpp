@@ -15,7 +15,7 @@ namespace digx
     class garlic_bulb : public zwodee::entity
     {
     public:
-        garlic_bulb(uint32_t network_id, const zwodee::texture* tex);
+        garlic_bulb(uint32_t network_id);
 
         void tick() override;
     };

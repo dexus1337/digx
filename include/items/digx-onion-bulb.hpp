@@ -15,7 +15,7 @@ namespace digx
     class onion_bulb : public zwodee::entity
     {
     public:
-        onion_bulb(uint32_t network_id, const zwodee::texture* tex);
+        onion_bulb(uint32_t network_id);
 
         void tick() override;
     };

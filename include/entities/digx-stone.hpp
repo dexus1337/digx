@@ -22,7 +22,7 @@ namespace digx
             color_low
         };
 
-        stone(uint32_t network_id, const zwodee::texture* tex, stone_color col);
+        stone(uint32_t network_id, stone_color col);
 
         void tick() override;
 
@@ -32,12 +32,12 @@ namespace digx
 
         void push(float speed_x);
 
-        [[nodiscard]] stone_color get_color() const;
-        [[nodiscard]] int get_explosion_radius() const;
-        [[nodiscard]] bool is_falling() const;
-        [[nodiscard]] bool is_moving() const;
-        [[nodiscard]] int get_wiggle_ticks() const;
-        [[nodiscard]] bool was_pushed() const;
+        stone_color get_color() const;
+        int get_explosion_radius() const;
+        bool is_falling() const;
+        bool is_moving() const;
+        int get_wiggle_ticks() const;
+        bool was_pushed() const;
         
         void set_falling(bool falling);
         void start_wiggle();

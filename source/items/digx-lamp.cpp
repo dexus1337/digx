@@ -1,9 +1,10 @@
 #include "items/digx-lamp.hpp"
+#include "assets/texture-cache.hpp"
 
 namespace digx
 {
-    lamp::lamp(uint32_t network_id, const zwodee::texture* tex)
-        : zwodee::entity(network_id, tex, 1)
+    lamp::lamp(uint32_t network_id)
+        : zwodee::entity(network_id, texture_cache::get().lamp_tex.get(), 1)
     {
         m_width = 32.0f;
         m_height = 32.0f;

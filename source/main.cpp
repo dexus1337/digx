@@ -20,7 +20,7 @@ int main(int argc, char* argv[])
 
     // Register demo level (it will also be reloaded/recreated dynamically when Start Game is selected)
     auto level = std::make_unique<digx::level>(35, 35);
-    level->load_demo_level(engine);
+    level->init(engine, "level1");
     engine.get_level_manager().register_level("demo", std::move(level));
 
     engine.get_level_manager().transition_to("main_menu");

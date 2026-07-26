@@ -29,77 +29,21 @@ namespace digx
         void render(zwodee::renderer& target_renderer, double alpha) override;
         zwodee::render_snapshot get_render_snapshot(int display_w, int display_h) const override;
 
-        void load_demo_level(zwodee::engine& engine);
+        void init(zwodee::engine& engine, const std::string& level_name);
+        void load_from_zwl(const std::string& path);
         void restart();
 
-        [[nodiscard]] player* get_player() const;
+        player* get_player() const;
 
-        /// Returns a randomly chosen diamond texture from m_diamond_textures,
-        /// falling back to m_fallback_tex if the pool is empty.
-        [[nodiscard]] const zwodee::texture* get_random_diamond_texture() const;
-        [[nodiscard]] bool is_tile_digged(int gx, int gy) const;
+
+        bool is_tile_digged(int gx, int gy) const;
         void dig_tile(int gx, int gy);
         void explode_stone(class stone* st, int custom_radius = -1);
         void trigger_fart_effect(float x, float y);
 
     private:
         player* m_player = nullptr;
-        
-        // Textures preloaded and shared across levels
-        std::shared_ptr<zwodee::texture> m_player_shovel_tex;
-        std::shared_ptr<zwodee::texture> m_player_shovel_running_tex;
-        std::shared_ptr<zwodee::texture> m_player_shovel_running_up_tex;
-        std::shared_ptr<zwodee::texture> m_player_shovel_running_down_tex;
-        std::shared_ptr<zwodee::texture> m_player_pickaxe_tex;
-        std::shared_ptr<zwodee::texture> m_player_pickaxe_running_tex;
-        std::shared_ptr<zwodee::texture> m_player_pickaxe_running_up_tex;
-        std::shared_ptr<zwodee::texture> m_player_pickaxe_running_down_tex;
-        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_shovel_running_texs;
-        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_shovel_running_up_texs;
-        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_shovel_running_down_texs;
-        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_pickaxe_running_texs;
-        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_pickaxe_running_up_texs;
-        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_pickaxe_running_down_texs;
-        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_shovel_tex;
-        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_shovel_up_tex;
-        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_shovel_down_tex;
-        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_pickaxe_tex;
-        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_pickaxe_up_tex;
-        std::array<std::shared_ptr<zwodee::texture>, 2> m_player_digging_pickaxe_down_tex;
-        std::shared_ptr<zwodee::texture> m_stone_high_tex;
-        std::shared_ptr<zwodee::texture> m_stone_low_tex;
-        std::shared_ptr<zwodee::texture> m_stone_mid_tex;
-        std::shared_ptr<zwodee::texture> m_pickaxe_tex;
-        std::shared_ptr<zwodee::texture> m_coin_tex;
-        std::shared_ptr<zwodee::texture> m_door_closed_tex;
-        std::shared_ptr<zwodee::texture> m_door_open_tex;
-        std::vector<std::shared_ptr<zwodee::texture>> m_diamond_textures;
-        std::shared_ptr<zwodee::texture> m_garlic_tex;
-        std::shared_ptr<zwodee::texture> m_onion_tex;
-        std::shared_ptr<zwodee::texture> m_lamp_tex;
-        std::shared_ptr<zwodee::texture> m_blink_tex;
-        std::shared_ptr<zwodee::texture> m_digged_tex;
-        std::array<std::shared_ptr<zwodee::texture>, 4> m_static_stone_textures;
-        std::shared_ptr<zwodee::texture> m_bg_tex;
-        std::shared_ptr<zwodee::texture> m_fallback_tex;
-        
-        // Preloaded enemy textures
-        std::shared_ptr<zwodee::texture> m_vampire_sleeping_tex;
-        std::shared_ptr<zwodee::texture> m_vampire_triggered_tex;
-        std::shared_ptr<zwodee::texture> m_player_dead_tex;
-        std::shared_ptr<zwodee::texture> m_fart_tex;
-        std::shared_ptr<zwodee::texture> m_soldier_tex;
-        std::shared_ptr<zwodee::texture> m_soldier_front_tex;
-        std::shared_ptr<zwodee::texture> m_soldier_back_tex;
-        std::shared_ptr<zwodee::texture> m_soldier_side_tex;
-        std::shared_ptr<zwodee::texture> m_mummy_tex;
-        std::shared_ptr<zwodee::texture> m_mummy_front_tex;
-        std::shared_ptr<zwodee::texture> m_mummy_back_tex;
-        std::shared_ptr<zwodee::texture> m_mummy_side_tex;
-        std::shared_ptr<zwodee::texture> m_dragon_red_tex;
-        std::shared_ptr<zwodee::texture> m_dragon_green_tex;
-        std::shared_ptr<zwodee::texture> m_dirt_tex;
-        std::array<std::shared_ptr<zwodee::texture>, 3> m_dirt_breaking_texs;
+
 
         // Target number of gold coins to collect to open the exit
         int m_target_gold = 0;
@@ -113,6 +57,7 @@ namespace digx
         float m_lamp_timer = 0.0f;
 
         int m_level_number = 1;
+        std::string m_level_name;
         float m_current_darkness = 1.0f;
         float m_target_darkness = 1.0f;
         zwodee::engine* m_engine = nullptr;
@@ -146,5 +91,26 @@ namespace digx
         int m_death_sequence_ticks = -1;
         std::vector<button> m_game_over_buttons;
         int m_game_over_selected_index = 0;
+
+        // Game Won (Winner) state members
+        bool m_game_won = false;
+        std::vector<button> m_game_won_buttons;
+        int m_game_won_selected_index = 0;
+
+    public:
+        struct player_persistent_state {
+            int score = 0;
+            int diamonds = 0;
+            int garlic = 0;
+            int onion = 0;
+            bool has_pickaxe = false;
+        };
+
+        void set_persistent_state(const player_persistent_state& state);
+        void advance_to_next_level();
+
+    private:
+        player_persistent_state m_persisted_state;
+        bool m_has_persisted_state = false;
     };
 }

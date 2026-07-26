@@ -17,7 +17,7 @@ namespace digx
     class dragon : public zwodee::entity
     {
     public:
-        dragon(uint32_t network_id, const zwodee::texture* tex);
+        dragon(uint32_t network_id);
 
         void tick() override;
 

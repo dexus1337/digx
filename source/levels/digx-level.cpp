@@ -16,6 +16,8 @@
 #include <SDL3/SDL.h>
 #include <cmath>
 #include <algorithm>
+#include <fstream>
+#include <string_view>
 
 namespace digx
 {
@@ -88,12 +90,18 @@ namespace digx
             bool left_clicked = is_left_down && !was_left_down;
             was_left_down = is_left_down;
 
+            static float prev_mx_over = -1.0f;
+            static float prev_my_over = -1.0f;
+            bool mouse_moved = (mx != prev_mx_over || my != prev_my_over);
+            prev_mx_over = mx;
+            prev_my_over = my;
+
             bool hovered_any = false;
             for (size_t i = 0; i < m_game_over_buttons.size(); ++i)
             {
                 if (m_game_over_buttons[i].is_hovered(mx, my))
                 {
-                    m_game_over_selected_index = static_cast<int>(i);
+                    if (mouse_moved) m_game_over_selected_index = static_cast<int>(i);
                     hovered_any = true;
                     break;
                 }
@@ -129,6 +137,82 @@ namespace digx
                 else if (m_game_over_selected_index == 2) // Exit
                 {
                     m_engine->stop();
+                }
+            }
+            m_last_input = m_current_input;
+            return;
+        }
+
+        if (m_game_won)
+        {
+            float screen_w = static_cast<float>(m_engine->get_window().get_width());
+            float btn_w = 300.0f;
+            float btn_h = 50.0f;
+            float btn_x = (screen_w - btn_w) * 0.5f;
+
+            m_game_won_buttons.clear();
+            m_game_won_buttons.push_back(button("Restart Game", btn_x, 260.0f, btn_w, btn_h));
+            m_game_won_buttons.push_back(button("Main Menu", btn_x, 330.0f, btn_w, btn_h));
+
+            // Mouse controls
+            float mx = 0.0f, my = 0.0f;
+            uint32_t mouse_buttons = SDL_GetMouseState(&mx, &my);
+            float scale = m_engine->get_window().get_scale_factor();
+            mx /= scale;
+            my /= scale;
+            bool is_left_down = (mouse_buttons & SDL_BUTTON_LMASK) != 0;
+
+            static bool was_left_down_won = false;
+            bool left_clicked = is_left_down && !was_left_down_won;
+            was_left_down_won = is_left_down;
+
+            static float prev_mx_won = -1.0f;
+            static float prev_my_won = -1.0f;
+            bool mouse_moved = (mx != prev_mx_won || my != prev_my_won);
+            prev_mx_won = mx;
+            prev_my_won = my;
+
+            bool hovered_any = false;
+            for (size_t i = 0; i < m_game_won_buttons.size(); ++i)
+            {
+                if (m_game_won_buttons[i].is_hovered(mx, my))
+                {
+                    if (mouse_moved) m_game_won_selected_index = static_cast<int>(i);
+                    hovered_any = true;
+                    break;
+                }
+            }
+
+            // Keyboard navigation
+            if (m_current_input.is_down(zwodee::input_state::move_up) && !m_last_input.is_down(zwodee::input_state::move_up))
+            {
+                m_game_won_selected_index = (m_game_won_selected_index - 1 + static_cast<int>(m_game_won_buttons.size())) % static_cast<int>(m_game_won_buttons.size());
+            }
+            else if (m_current_input.is_down(zwodee::input_state::move_down) && !m_last_input.is_down(zwodee::input_state::move_down))
+            {
+                m_game_won_selected_index = (m_game_won_selected_index + 1) % static_cast<int>(m_game_won_buttons.size());
+            }
+
+            // Trigger selected menu item
+            bool trigger_action = (m_current_input.is_down(zwodee::input_state::action_1) && !m_last_input.is_down(zwodee::input_state::action_1)) || (left_clicked && hovered_any);
+
+            if (trigger_action)
+            {
+                if (m_game_won_selected_index == 0) // Restart
+                {
+                    m_game_won = false;
+                    auto new_level = std::make_unique<digx::level>(get_width(), get_height(), 1);
+                    new_level->init(*m_engine, "level1");
+                    
+                    static int restart_counter = 0;
+                    std::string restart_id = "restart_level_" + std::to_string(++restart_counter);
+                    m_engine->get_level_manager().register_level(restart_id, std::move(new_level));
+                    m_engine->get_level_manager().transition_to(restart_id);
+                }
+                else if (m_game_won_selected_index == 1) // Main Menu
+                {
+                    m_game_won = false;
+                    m_engine->get_level_manager().transition_to("main_menu");
                 }
             }
             m_last_input = m_current_input;
@@ -183,12 +267,18 @@ namespace digx
             bool left_clicked = is_left_down && !was_left_down;
             was_left_down = is_left_down;
 
+            static float prev_mx_pause = -1.0f;
+            static float prev_my_pause = -1.0f;
+            bool mouse_moved = (mx != prev_mx_pause || my != prev_my_pause);
+            prev_mx_pause = mx;
+            prev_my_pause = my;
+
             bool hovered_any = false;
             for (size_t i = 0; i < m_pause_buttons.size(); ++i)
             {
                 if (m_pause_buttons[i].is_hovered(mx, my))
                 {
-                    m_pause_selected_index = static_cast<int>(i);
+                    if (mouse_moved) m_pause_selected_index = static_cast<int>(i);
                     hovered_any = true;
                     break;
                 }
@@ -302,11 +392,9 @@ namespace digx
                         // Check if player is NOT currently standing on the spawn tile
                         if (p_gx != trigger.gx || p_gy != trigger.gy)
                         {
-                            const zwodee::texture* mummy_front = m_mummy_front_tex ? m_mummy_front_tex.get() : m_fallback_tex.get();
-                            const zwodee::texture* mummy_back = m_mummy_back_tex ? m_mummy_back_tex.get() : m_fallback_tex.get();
-                            const zwodee::texture* mummy_side = m_mummy_side_tex ? m_mummy_side_tex.get() : m_fallback_tex.get();
+
                             
-                            auto m = std::make_unique<mummy>(m_next_dynamic_mummy_id++, mummy_front, mummy_back, mummy_side);
+                            auto m = std::make_unique<mummy>(m_next_dynamic_mummy_id++);
                             m->set_grid_position(trigger.gx, trigger.gy);
                             m->trigger_spawn(); // Set spawned true
                             add_entity(std::move(m));
@@ -331,7 +419,7 @@ namespace digx
                 {
                     audio->play_sound("death");
                 }
-                m_player->set_texture(m_player_dead_tex ? m_player_dead_tex.get() : m_fallback_tex.get());
+                m_player->set_texture(texture_cache::get().player_dead_tex.get() ? texture_cache::get().player_dead_tex.get() : texture_cache::get().fallback_tex.get());
                 m_death_sequence_ticks = 384; // 3 seconds at 128Hz
             }
             else if (m_death_sequence_ticks > 0)
@@ -360,9 +448,9 @@ namespace digx
         {
             const auto& tiles = get_static_objects();
             size_t idx = static_cast<size_t>(pgy) * get_width() + static_cast<size_t>(pgx);
-            if (idx < tiles.size() && (!tiles[idx] || (tiles[idx]->get_texture() != m_digged_tex.get() && !tiles[idx]->is_collidable())))
+            if (idx < tiles.size() && (!tiles[idx] || (tiles[idx]->get_texture() != texture_cache::get().digged_tex.get() && !tiles[idx]->is_collidable())))
             {
-                set_tile(pgx, pgy, 1, 0, m_digged_tex.get());
+                set_tile(pgx, pgy, 1, 0, texture_cache::get().digged_tex.get());
                 // Make sure the digged tile is not collidable
                 if (get_static_objects()[idx])
                 {
@@ -399,7 +487,7 @@ namespace digx
             float dy = py - m_exit_y;
             if (std::sqrt(dx * dx + dy * dy) < 24.0f)
             {
-                restart();
+                advance_to_next_level();
                 return;
             }
         }
@@ -830,14 +918,14 @@ namespace digx
             }
 
             const zwodee::texture* tex = tile->get_texture();
-            bool is_rock = (tex == m_static_stone_textures[0].get() ||
-                            tex == m_static_stone_textures[1].get() ||
-                            tex == m_static_stone_textures[2].get() ||
-                            tex == m_static_stone_textures[3].get());
+            bool is_rock = (tex == texture_cache::get().static_stone_textures[0].get() ||
+                            tex == texture_cache::get().static_stone_textures[1].get() ||
+                            tex == texture_cache::get().static_stone_textures[2].get() ||
+                            tex == texture_cache::get().static_stone_textures[3].get());
 
-            if (is_rock && m_dirt_tex)
+            if (is_rock && texture_cache::get().dirt_tex.get())
             {
-                target_renderer.draw_sprite(*m_dirt_tex, 0, 0, m_dirt_tex->get_width(), m_dirt_tex->get_height(), tile->get_x(), tile->get_y(), tile->get_width(), tile->get_height());
+                target_renderer.draw_sprite(*texture_cache::get().dirt_tex.get(), 0, 0, texture_cache::get().dirt_tex->get_width(), texture_cache::get().dirt_tex->get_height(), tile->get_x(), tile->get_y(), tile->get_width(), tile->get_height());
             }
 
             tile->render(target_renderer, alpha);
@@ -857,188 +945,11 @@ namespace digx
 
     namespace
     {
-        std::unique_ptr<zwodee::texture> create_solid_color_texture(zwodee::renderer& r, int w, int h, uint8_t red, uint8_t green, uint8_t blue, uint8_t alpha)
-        {
-            SDL_Texture* sdl_tex = SDL_CreateTexture(r.get_raw_renderer(), SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STATIC, w, h);
-            if (!sdl_tex)
-            {
-                return nullptr;
-            }
-            
-            // Pixel value (RGBA8888 format in little-endian is AABBGGRR)
-            uint32_t pixel = (red) | (green << 8) | (blue << 16) | (alpha << 24);
-            std::vector<uint32_t> pixels(w * h, pixel);
-            
-            SDL_UpdateTexture(sdl_tex, nullptr, pixels.data(), w * 4);
-            SDL_SetTextureBlendMode(sdl_tex, SDL_BLENDMODE_BLEND);
-            
-            return std::make_unique<zwodee::texture>(sdl_tex, w, h);
-        }
-
-        struct texture_cache
-        {
-            std::shared_ptr<zwodee::texture> player_shovel_tex;
-            std::shared_ptr<zwodee::texture> player_shovel_running_tex;
-            std::shared_ptr<zwodee::texture> player_shovel_running_up_tex;
-            std::shared_ptr<zwodee::texture> player_shovel_running_down_tex;
-            std::shared_ptr<zwodee::texture> player_pickaxe_tex;
-            std::shared_ptr<zwodee::texture> player_pickaxe_running_tex;
-            std::shared_ptr<zwodee::texture> player_pickaxe_running_up_tex;
-            std::shared_ptr<zwodee::texture> player_pickaxe_running_down_tex;
-            std::array<std::shared_ptr<zwodee::texture>, 2> player_shovel_running_texs;
-            std::array<std::shared_ptr<zwodee::texture>, 2> player_shovel_running_up_texs;
-            std::array<std::shared_ptr<zwodee::texture>, 2> player_shovel_running_down_texs;
-            std::array<std::shared_ptr<zwodee::texture>, 2> player_pickaxe_running_texs;
-            std::array<std::shared_ptr<zwodee::texture>, 2> player_pickaxe_running_up_texs;
-            std::array<std::shared_ptr<zwodee::texture>, 2> player_pickaxe_running_down_texs;
-            std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_shovel_tex;
-            std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_shovel_up_tex;
-            std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_shovel_down_tex;
-            std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_pickaxe_tex;
-            std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_pickaxe_up_tex;
-            std::array<std::shared_ptr<zwodee::texture>, 2> player_digging_pickaxe_down_tex;
-            std::shared_ptr<zwodee::texture> stone_high_tex;
-            std::shared_ptr<zwodee::texture> stone_low_tex;
-            std::shared_ptr<zwodee::texture> stone_mid_tex;
-            std::shared_ptr<zwodee::texture> pickaxe_tex;
-            std::shared_ptr<zwodee::texture> coin_tex;
-            std::shared_ptr<zwodee::texture> door_closed_tex;
-            std::shared_ptr<zwodee::texture> door_open_tex;
-            std::vector<std::shared_ptr<zwodee::texture>> diamond_textures;
-            std::shared_ptr<zwodee::texture> garlic_tex;
-            std::shared_ptr<zwodee::texture> onion_tex;
-            std::shared_ptr<zwodee::texture> lamp_tex;
-            std::shared_ptr<zwodee::texture> blink_tex;
-            std::shared_ptr<zwodee::texture> digged_tex;
-            std::array<std::shared_ptr<zwodee::texture>, 4> static_stone_textures;
-            std::shared_ptr<zwodee::texture> bg_tex;
-            std::shared_ptr<zwodee::texture> fallback_tex;
-            
-            std::shared_ptr<zwodee::texture> vampire_sleeping_tex;
-            std::shared_ptr<zwodee::texture> vampire_triggered_tex;
-            std::shared_ptr<zwodee::texture> player_dead_tex;
-            std::shared_ptr<zwodee::texture> fart_tex;
-            std::shared_ptr<zwodee::texture> soldier_tex;
-            std::shared_ptr<zwodee::texture> soldier_front_tex;
-            std::shared_ptr<zwodee::texture> soldier_back_tex;
-            std::shared_ptr<zwodee::texture> soldier_side_tex;
-            std::shared_ptr<zwodee::texture> mummy_tex;
-            std::shared_ptr<zwodee::texture> mummy_front_tex;
-            std::shared_ptr<zwodee::texture> mummy_back_tex;
-            std::shared_ptr<zwodee::texture> mummy_side_tex;
-            std::shared_ptr<zwodee::texture> dragon_red_tex;
-            std::shared_ptr<zwodee::texture> dragon_green_tex;
-            std::shared_ptr<zwodee::texture> dirt_tex;
-            std::array<std::shared_ptr<zwodee::texture>, 3> dirt_breaking_texs;
- 
-            bool loaded = false;
- 
-            void load_all(zwodee::renderer& r)
-            {
-                if (loaded) return;
- 
-                player_shovel_tex             = r.load_dds_texture("assets/textures/goblin-idle-shovel.dds");
-                player_shovel_running_tex     = r.load_dds_texture("assets/textures/goblin-running-shovel-1.dds");
-                player_shovel_running_up_tex  = r.load_dds_texture("assets/textures/goblin-running-up-shovel-1.dds");
-                player_shovel_running_down_tex = r.load_dds_texture("assets/textures/goblin-running-down-shovel-1.dds");
-                player_pickaxe_tex            = r.load_dds_texture("assets/textures/goblin-idle-pickaxe.dds");
-                player_pickaxe_running_tex    = r.load_dds_texture("assets/textures/goblin-running-pickaxe-1.dds");
-                player_pickaxe_running_up_tex  = r.load_dds_texture("assets/textures/goblin-running-up-pickaxe-1.dds");
-                player_pickaxe_running_down_tex = r.load_dds_texture("assets/textures/goblin-running-down-pickaxe-1.dds");
-
-                player_shovel_running_texs[0] = r.load_dds_texture("assets/textures/goblin-running-shovel-1.dds");
-                player_shovel_running_texs[1] = r.load_dds_texture("assets/textures/goblin-running-shovel-2.dds");
-                player_shovel_running_up_texs[0] = r.load_dds_texture("assets/textures/goblin-running-up-shovel-1.dds");
-                player_shovel_running_up_texs[1] = r.load_dds_texture("assets/textures/goblin-running-up-shovel-2.dds");
-                player_shovel_running_down_texs[0] = r.load_dds_texture("assets/textures/goblin-running-down-shovel-1.dds");
-                player_shovel_running_down_texs[1] = r.load_dds_texture("assets/textures/goblin-running-down-shovel-2.dds");
-
-                player_pickaxe_running_texs[0] = r.load_dds_texture("assets/textures/goblin-running-pickaxe-1.dds");
-                player_pickaxe_running_texs[1] = r.load_dds_texture("assets/textures/goblin-running-pickaxe-2.dds");
-                player_pickaxe_running_up_texs[0] = r.load_dds_texture("assets/textures/goblin-running-up-pickaxe-1.dds");
-                player_pickaxe_running_up_texs[1] = r.load_dds_texture("assets/textures/goblin-running-up-pickaxe-2.dds");
-                player_pickaxe_running_down_texs[0] = r.load_dds_texture("assets/textures/goblin-running-down-pickaxe-1.dds");
-                player_pickaxe_running_down_texs[1] = r.load_dds_texture("assets/textures/goblin-running-down-pickaxe-2.dds");
-                 
-                player_digging_shovel_tex[0] = r.load_dds_texture("assets/textures/goblin-digging-shovel-1.dds");
-                player_digging_shovel_tex[1] = r.load_dds_texture("assets/textures/goblin-digging-shovel-2.dds");
-                player_digging_shovel_up_tex[0] = r.load_dds_texture("assets/textures/goblin-digging-up-shovel-1.dds");
-                player_digging_shovel_up_tex[1] = r.load_dds_texture("assets/textures/goblin-digging-up-shovel-2.dds");
-                player_digging_shovel_down_tex[0] = r.load_dds_texture("assets/textures/goblin-digging-down-shovel-1.dds");
-                player_digging_shovel_down_tex[1] = r.load_dds_texture("assets/textures/goblin-digging-down-shovel-2.dds");
-
-                player_digging_pickaxe_tex[0] = r.load_dds_texture("assets/textures/goblin-digging-pickaxe-1.dds");
-                player_digging_pickaxe_tex[1] = r.load_dds_texture("assets/textures/goblin-digging-pickaxe-2.dds");
-                player_digging_pickaxe_up_tex[0] = r.load_dds_texture("assets/textures/goblin-digging-up-pickaxe-1.dds");
-                player_digging_pickaxe_up_tex[1] = r.load_dds_texture("assets/textures/goblin-digging-up-pickaxe-2.dds");
-                player_digging_pickaxe_down_tex[0] = r.load_dds_texture("assets/textures/goblin-digging-down-pickaxe-1.dds");
-                player_digging_pickaxe_down_tex[1] = r.load_dds_texture("assets/textures/goblin-digging-down-pickaxe-2.dds");
-
-                for (int i = 0; i < 2; ++i)
-                {
-                    if (!player_digging_pickaxe_tex[i]) player_digging_pickaxe_tex[i] = player_digging_shovel_tex[i];
-                    if (!player_digging_pickaxe_up_tex[i]) player_digging_pickaxe_up_tex[i] = player_digging_shovel_up_tex[i];
-                    if (!player_digging_pickaxe_down_tex[i]) player_digging_pickaxe_down_tex[i] = player_digging_shovel_down_tex[i];
-                }
-
-                stone_high_tex                = r.load_dds_texture("assets/textures/stone-high.dds");
-                stone_low_tex                 = r.load_dds_texture("assets/textures/stone-low.dds");
-                stone_mid_tex                 = r.load_dds_texture("assets/textures/stone-mid.dds");
-                pickaxe_tex                   = r.load_dds_texture("assets/textures/pickaxe.dds");
-                coin_tex                      = r.load_dds_texture("assets/textures/coin.dds");
-                door_closed_tex               = r.load_dds_texture("assets/textures/door-closed.dds");
-                door_open_tex                 = r.load_dds_texture("assets/textures/door-open.dds");
-                garlic_tex                    = r.load_dds_texture("assets/textures/garlic.dds");
-                onion_tex                     = r.load_dds_texture("assets/textures/onion.dds");
-                lamp_tex                      = r.load_dds_texture("assets/textures/lamp.dds");
-                blink_tex                     = r.load_dds_texture("assets/textures/blink.dds");
-                digged_tex                    = r.load_dds_texture("assets/textures/digged.dds");
-                 
-                static_stone_textures[0]      = r.load_dds_texture("assets/textures/stone-1.dds");
-                static_stone_textures[1]      = r.load_dds_texture("assets/textures/stone-2.dds");
-                static_stone_textures[2]      = r.load_dds_texture("assets/textures/stone-3.dds");
-                static_stone_textures[3]      = r.load_dds_texture("assets/textures/stone-4.dds");
- 
-                const std::vector<std::string> diamond_colors = { "green", "orange", "purple", "blue" };
-                for (const auto& color : diamond_colors)
-                {
-                    if (auto tex = r.load_dds_texture("assets/textures/diamond-" + color + ".dds"))
-                    {
-                        diamond_textures.push_back(std::move(tex));
-                    }
-                }
-                 
-                bg_tex                        = r.load_dds_texture("assets/textures/header.dds");
-                fallback_tex                  = create_solid_color_texture(r, 32, 32, 255, 0, 0, 255);
- 
-                vampire_sleeping_tex          = r.load_dds_texture("assets/textures/vampire-sleeping.dds");
-                vampire_triggered_tex         = r.load_dds_texture("assets/textures/vampire-triggered.dds");
-                player_dead_tex               = r.load_dds_texture("assets/textures/goblin-dead.dds");
-                fart_tex                      = r.load_dds_texture("assets/textures/fart.dds");
-                soldier_tex                   = r.load_dds_texture("assets/textures/soldier-front.dds");
-                soldier_front_tex             = r.load_dds_texture("assets/textures/soldier-front.dds");
-                soldier_back_tex              = r.load_dds_texture("assets/textures/soldier-back.dds");
-                soldier_side_tex              = r.load_dds_texture("assets/textures/soldier-side.dds");
-                mummy_tex                     = r.load_dds_texture("assets/textures/mummy.dds");
-                mummy_front_tex               = r.load_dds_texture("assets/textures/mummy-front.dds");
-                mummy_back_tex                = r.load_dds_texture("assets/textures/mummy-back.dds");
-                mummy_side_tex                = r.load_dds_texture("assets/textures/mummy-side.dds");
-                dragon_red_tex                = r.load_dds_texture("assets/textures/dragon-red.dds");
-                dragon_green_tex              = r.load_dds_texture("assets/textures/dragon-green.dds");
-                dirt_tex                      = r.load_dds_texture("assets/textures/dirt.dds");
-                dirt_breaking_texs[0]         = r.load_dds_texture("assets/textures/dirt-breaking-1.dds");
-                dirt_breaking_texs[1]         = r.load_dds_texture("assets/textures/dirt-breaking-2.dds");
-                dirt_breaking_texs[2]         = r.load_dds_texture("assets/textures/dirt-breaking-3.dds");
- 
-                loaded = true;
-            }
-        };
-
-        texture_cache g_textures;
     }
 
-    void level::load_demo_level(zwodee::engine& engine)
+    void level::init(zwodee::engine& engine, const std::string& level_name)
     {
+        m_level_name = level_name;
         m_engine = &engine;
         m_font = std::make_unique<zwodee::font>(engine.get_renderer(), "assets/fonts/Roboto-Medium.ttf", 72.0f);
         m_pause_buttons.clear();
@@ -1078,406 +989,13 @@ namespace digx
             audio.load_sound("pickaxe_dig_" + std::to_string(i), "assets/sounds/digging/pickaxe/pickaxe-" + std::to_string(i) + ".wav");
         }
 
-        // Load textures inside level class (preloaded once in g_textures)
-        g_textures.load_all(r);
-
-        m_player_shovel_tex             = g_textures.player_shovel_tex;
-        m_player_shovel_running_texs     = g_textures.player_shovel_running_texs;
-        m_player_shovel_running_up_texs  = g_textures.player_shovel_running_up_texs;
-        m_player_shovel_running_down_texs = g_textures.player_shovel_running_down_texs;
-        m_player_pickaxe_running_texs    = g_textures.player_pickaxe_running_texs;
-        m_player_pickaxe_running_up_texs  = g_textures.player_pickaxe_running_up_texs;
-        m_player_pickaxe_running_down_texs = g_textures.player_pickaxe_running_down_texs;
-        m_player_pickaxe_tex            = g_textures.player_pickaxe_tex;
-        m_player_digging_shovel_tex       = g_textures.player_digging_shovel_tex;
-        m_player_digging_shovel_up_tex    = g_textures.player_digging_shovel_up_tex;
-        m_player_digging_shovel_down_tex  = g_textures.player_digging_shovel_down_tex;
-        m_player_digging_pickaxe_tex      = g_textures.player_digging_pickaxe_tex;
-        m_player_digging_pickaxe_up_tex    = g_textures.player_digging_pickaxe_up_tex;
-        m_player_digging_pickaxe_down_tex  = g_textures.player_digging_pickaxe_down_tex;
-        m_stone_high_tex                = g_textures.stone_high_tex;
-        m_stone_low_tex                 = g_textures.stone_low_tex;
-        m_stone_mid_tex                 = g_textures.stone_mid_tex;
-        m_pickaxe_tex                   = g_textures.pickaxe_tex;
-        m_coin_tex                      = g_textures.coin_tex;
-        m_door_closed_tex               = g_textures.door_closed_tex;
-        m_door_open_tex                 = g_textures.door_open_tex;
-        m_garlic_tex                    = g_textures.garlic_tex;
-        m_onion_tex                     = g_textures.onion_tex;
-        m_lamp_tex                      = g_textures.lamp_tex;
-        m_blink_tex                     = g_textures.blink_tex;
-        m_digged_tex                    = g_textures.digged_tex;
-        
-        m_static_stone_textures[0]      = g_textures.static_stone_textures[0];
-        m_static_stone_textures[1]      = g_textures.static_stone_textures[1];
-        m_static_stone_textures[2]      = g_textures.static_stone_textures[2];
-        m_static_stone_textures[3]      = g_textures.static_stone_textures[3];
-
-        m_diamond_textures              = g_textures.diamond_textures;
-        
-        m_bg_tex                        = g_textures.bg_tex;
-        m_fallback_tex                  = g_textures.fallback_tex;
-
-        m_vampire_sleeping_tex          = g_textures.vampire_sleeping_tex;
-        m_vampire_triggered_tex         = g_textures.vampire_triggered_tex;
-        m_player_dead_tex               = g_textures.player_dead_tex;
-        m_fart_tex                      = g_textures.fart_tex;
-        m_soldier_tex                   = g_textures.soldier_tex;
-        m_soldier_front_tex             = g_textures.soldier_front_tex;
-        m_soldier_back_tex              = g_textures.soldier_back_tex;
-        m_soldier_side_tex              = g_textures.soldier_side_tex;
-        m_mummy_tex                     = g_textures.mummy_tex;
-        m_mummy_front_tex               = g_textures.mummy_front_tex;
-        m_mummy_back_tex                = g_textures.mummy_back_tex;
-        m_mummy_side_tex                = g_textures.mummy_side_tex;
-        m_dragon_red_tex                = g_textures.dragon_red_tex;
-        m_dragon_green_tex              = g_textures.dragon_green_tex;
-        m_dirt_tex                      = g_textures.dirt_tex;
-        m_dirt_breaking_texs            = g_textures.dirt_breaking_texs;
-
-        const zwodee::texture* fallback_tex_ptr = m_fallback_tex.get();
-        const zwodee::texture* shovel_idle = m_player_shovel_tex ? m_player_shovel_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* shovel_run = m_player_shovel_running_tex ? m_player_shovel_running_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* shovel_run_up = m_player_shovel_running_up_tex ? m_player_shovel_running_up_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* shovel_run_down = m_player_shovel_running_down_tex ? m_player_shovel_running_down_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* pickaxe_idle = m_player_pickaxe_tex ? m_player_pickaxe_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* pickaxe_run = m_player_pickaxe_running_tex ? m_player_pickaxe_running_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* pickaxe_run_up = m_player_pickaxe_running_up_tex ? m_player_pickaxe_running_up_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* pickaxe_run_down = m_player_pickaxe_running_down_tex ? m_player_pickaxe_running_down_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* stone_high_tex = m_stone_high_tex ? m_stone_high_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* stone_low_tex = m_stone_low_tex ? m_stone_low_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* stone_mid_tex = m_stone_mid_tex ? m_stone_mid_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* pickaxe_tex = m_pickaxe_tex ? m_pickaxe_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* coint_text = m_coin_tex ? m_coin_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* door_closed = m_door_closed_tex ? m_door_closed_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* door_open = m_door_open_tex ? m_door_open_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* garlic_tex = m_garlic_tex ? m_garlic_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* onion_tex = m_onion_tex ? m_onion_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* lamp_tex = m_lamp_tex ? m_lamp_tex.get() : fallback_tex_ptr;
+        auto& tc = texture_cache::get();
+        tc.load_all(r);
 
         // Remove full stretched background texture
         set_background_texture(nullptr);
-
-        // Populate the entire grid with header, footer, and dirt tiles
-        const zwodee::texture* dirt_tex_ptr = m_dirt_tex ? m_dirt_tex.get() : fallback_tex_ptr;
-
-        for (uint32_t y = 0; y < get_height(); ++y)
-        {
-            for (uint32_t x = 0; x < get_width(); ++x)
-            {
-                if (y == 0 || y == 34)
-                {
-                    // Empty grid space (rendered as stretched header/footer)
-                    set_tile(x, y, 0, 0, nullptr);
-                }
-                else
-                {
-                    // Un-digged dirt earth by default (non-collidable so player can dig into them)
-                    set_tile(x, y, 2, 1, dirt_tex_ptr);
-                    size_t idx = static_cast<size_t>(y) * get_width() + x;
-                    if (idx < get_static_objects().size() && get_static_objects()[idx])
-                    {
-                        get_static_objects()[idx]->set_collidable(false);
-                        get_static_objects()[idx]->set_flip_horizontal(std::rand() % 2 == 0);
-                    }
-                }
-            }
-        }
-
-        // Initialize static stone barriers (barriers at y = 6, y = 14, and y = 24 to block downward progress)
-        std::vector<std::pair<int, int>> static_stone_positions;
-
-        // Barrier 1 at y = 6
-        for (int x = 0; x < 35; ++x)
-        {
-            static_stone_positions.push_back({x, 6});
-        }
-        // Barrier 2 at y = 14
-        for (int x = 0; x < 35; ++x)
-        {
-            static_stone_positions.push_back({x, 14});
-        }
-        // Barrier 3 at y = 24
-        for (int x = 0; x < 35; ++x)
-        {
-            static_stone_positions.push_back({x, 24});
-        }
-
-        // Set the static stone tiles
-        for (const auto& pos : static_stone_positions)
-        {
-            int rand_tex_idx = std::rand() % 4;
-            const zwodee::texture* stone_tex = m_static_stone_textures[rand_tex_idx] ? m_static_stone_textures[rand_tex_idx].get() : fallback_tex_ptr;
-            set_tile(pos.first, pos.second, 2, 1, stone_tex);
-            size_t idx = static_cast<size_t>(pos.second) * get_width() + static_cast<size_t>(pos.first);
-            if (idx < get_static_objects().size() && get_static_objects()[idx])
-            {
-                get_static_objects()[idx]->set_collidable(true);
-            }
-        }
-
-        auto dig_tile_at = [this, fallback_tex_ptr](int gx, int gy) {
-            set_tile(gx, gy, 1, 0, m_digged_tex ? m_digged_tex.get() : fallback_tex_ptr);
-            size_t idx = static_cast<size_t>(gy) * get_width() + static_cast<size_t>(gx);
-            if (idx < get_static_objects().size() && get_static_objects()[idx])
-            {
-                get_static_objects()[idx]->set_collidable(false);
-            }
-        };
-
-        // Dig a starting chamber at the very top (3x3 around player spawn at 17, 2)
-        for (int y = 2; y <= 4; ++y)
-        {
-            for (int x = 16; x <= 18; ++x)
-            {
-                if (x == 17 && y == 4)
-                {
-                    continue; // Leave as dirt to support puzzle1_stone1 at (17, 3)
-                }
-                dig_tile_at(x, y);
-            }
-        }
-
-        // Add player goblin at the top center
-        auto goblin = std::make_unique<player>(1, shovel_idle, shovel_run, shovel_run_up, shovel_run_down, pickaxe_idle, pickaxe_run, pickaxe_run_up, pickaxe_run_down, &audio);
-        goblin->set_digging_textures(
-            m_player_digging_shovel_tex[0] ? m_player_digging_shovel_tex[0].get() : nullptr,
-            m_player_digging_shovel_tex[1] ? m_player_digging_shovel_tex[1].get() : nullptr,
-            m_player_digging_shovel_up_tex[0] ? m_player_digging_shovel_up_tex[0].get() : nullptr,
-            m_player_digging_shovel_up_tex[1] ? m_player_digging_shovel_up_tex[1].get() : nullptr,
-            m_player_digging_shovel_down_tex[0] ? m_player_digging_shovel_down_tex[0].get() : nullptr,
-            m_player_digging_shovel_down_tex[1] ? m_player_digging_shovel_down_tex[1].get() : nullptr,
-            m_player_digging_pickaxe_tex[0] ? m_player_digging_pickaxe_tex[0].get() : nullptr,
-            m_player_digging_pickaxe_tex[1] ? m_player_digging_pickaxe_tex[1].get() : nullptr,
-            m_player_digging_pickaxe_up_tex[0] ? m_player_digging_pickaxe_up_tex[0].get() : nullptr,
-            m_player_digging_pickaxe_up_tex[1] ? m_player_digging_pickaxe_up_tex[1].get() : nullptr,
-            m_player_digging_pickaxe_down_tex[0] ? m_player_digging_pickaxe_down_tex[0].get() : nullptr,
-            m_player_digging_pickaxe_down_tex[1] ? m_player_digging_pickaxe_down_tex[1].get() : nullptr
-        );
-        goblin->set_running_textures(
-            m_player_shovel_running_texs[0] ? m_player_shovel_running_texs[0].get() : nullptr,
-            m_player_shovel_running_texs[1] ? m_player_shovel_running_texs[1].get() : nullptr,
-            m_player_shovel_running_up_texs[0] ? m_player_shovel_running_up_texs[0].get() : nullptr,
-            m_player_shovel_running_up_texs[1] ? m_player_shovel_running_up_texs[1].get() : nullptr,
-            m_player_shovel_running_down_texs[0] ? m_player_shovel_running_down_texs[0].get() : nullptr,
-            m_player_shovel_running_down_texs[1] ? m_player_shovel_running_down_texs[1].get() : nullptr,
-            m_player_pickaxe_running_texs[0] ? m_player_pickaxe_running_texs[0].get() : nullptr,
-            m_player_pickaxe_running_texs[1] ? m_player_pickaxe_running_texs[1].get() : nullptr,
-            m_player_pickaxe_running_up_texs[0] ? m_player_pickaxe_running_up_texs[0].get() : nullptr,
-            m_player_pickaxe_running_up_texs[1] ? m_player_pickaxe_running_up_texs[1].get() : nullptr,
-            m_player_pickaxe_running_down_texs[0] ? m_player_pickaxe_running_down_texs[0].get() : nullptr,
-            m_player_pickaxe_running_down_texs[1] ? m_player_pickaxe_running_down_texs[1].get() : nullptr
-        );
-        goblin->set_grid_bounds(get_width(), get_height());
-        goblin->set_level(this);
-        goblin->set_grid_position(17, 2);
-        m_player = goblin.get();
-        add_entity(std::move(goblin));
-
-        // Puzzle 1 (Opening Barrier at y=6):
-        // Place two stone-mid blocks with a 1-tile gap (at y=3 and y=5) in the starting corridor.
-        // Digging under the top stone lets it fall onto the bottom one to trigger an explosion!
-        auto puzzle1_stone1 = std::make_unique<stone>(810, stone_mid_tex, stone::color_mid);
-        puzzle1_stone1->set_grid_position(17, 3);
-        add_entity(std::move(puzzle1_stone1));
-
-        dig_tile_at(17, 5);
-        auto puzzle1_stone2 = std::make_unique<stone>(811, stone_mid_tex, stone::color_mid);
-        puzzle1_stone2->set_grid_position(17, 5);
-        add_entity(std::move(puzzle1_stone2));
-
-        // Dig a pocket for Soldier 1 (Stage 1 Left)
-        for (int y = 7; y <= 9; ++y)
-            for (int x = 4; x <= 8; ++x)
-                dig_tile_at(x, y);
-
-        // Dig a pocket for Soldier 2 (Stage 1 Right)
-        for (int y = 7; y <= 9; ++y)
-            for (int x = 26; x <= 30; ++x)
-                dig_tile_at(x, y);
-
-        // Puzzle 2 (Opening Barrier at y=14):
-        // Place two stone-mid blocks with a 1-tile gap (at y=10 and y=12).
-        // Digging them out will drop them on each other and blow up the y=14 barrier!
-        dig_tile_at(17, 10);
-        auto puzzle2_stone1 = std::make_unique<stone>(812, stone_mid_tex, stone::color_mid);
-        puzzle2_stone1->set_grid_position(17, 10);
-        add_entity(std::move(puzzle2_stone1));
-
-        dig_tile_at(17, 12);
-        auto puzzle2_stone2 = std::make_unique<stone>(813, stone_mid_tex, stone::color_mid);
-        puzzle2_stone2->set_grid_position(17, 12);
-        add_entity(std::move(puzzle2_stone2));
-
-        // Place sleeping vampire guarding the tunnel entrance in Stage 2
-        dig_tile_at(17, 17);
-        const zwodee::texture* sleeping_tex_ptr = m_vampire_sleeping_tex ? m_vampire_sleeping_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* triggered_tex_ptr = m_vampire_triggered_tex ? m_vampire_triggered_tex.get() : fallback_tex_ptr;
-        auto v1 = std::make_unique<vampire>(9, sleeping_tex_ptr, triggered_tex_ptr);
-        v1->set_grid_position(17, 17);
-        add_entity(std::move(v1));
-
-        // Puzzle 3 (Opening Barrier at y=24):
-        // Place two stone-high blocks with a 1-tile gap (at y=20 and y=22).
-        // Digging them triggers a massive explosion to clear the dragon cavern barrier!
-        dig_tile_at(17, 20);
-        auto puzzle3_stone1 = std::make_unique<stone>(814, stone_high_tex, stone::color_high);
-        puzzle3_stone1->set_grid_position(17, 20);
-        add_entity(std::move(puzzle3_stone1));
-
-        dig_tile_at(17, 22);
-        auto puzzle3_stone2 = std::make_unique<stone>(815, stone_high_tex, stone::color_high);
-        puzzle3_stone2->set_grid_position(17, 22);
-        add_entity(std::move(puzzle3_stone2));
-
-        // Stage 4 (Dragons):
-        // Dig horizontal corridors for dragon patrols
-        for (int y = 27; y <= 28; ++y)
-            for (int x = 5; x <= 31; ++x)
-                dig_tile_at(x, y);
-
-        for (int y = 29; y <= 30; ++y)
-            for (int x = 5; x <= 31; ++x)
-                dig_tile_at(x, y);
-
-        // Dragon patrol entities
-        auto get_random_dragon_tex = [this, fallback_tex_ptr]() -> const zwodee::texture* {
-            if (std::rand() % 2 == 0)
-            {
-                return m_dragon_red_tex ? m_dragon_red_tex.get() : fallback_tex_ptr;
-            }
-            else
-            {
-                return m_dragon_green_tex ? m_dragon_green_tex.get() : fallback_tex_ptr;
-            }
-        };
-
-        auto dr1 = std::make_unique<dragon>(12, get_random_dragon_tex());
-        dr1->set_grid_position(6, 27);
-        add_entity(std::move(dr1));
-
-        auto dr2 = std::make_unique<dragon>(112, get_random_dragon_tex());
-        dr2->set_grid_position(28, 29);
-        add_entity(std::move(dr2));
-
-        // Dig tunnel from Stage 4 to exit door at bottom
-        for (int y = 31; y <= 33; ++y)
-        {
-            dig_tile_at(17, y);
-        }
-
-        // Place items
-        // Pickaxes (Plenty of pickaxes near spawn for testing, shifted to prevent overlaps)
-        auto p1 = std::make_unique<pickaxe>(8, pickaxe_tex);
-        p1->set_grid_position(16, 2);
-        add_entity(std::move(p1));
-
-        auto p2 = std::make_unique<pickaxe>(108, pickaxe_tex);
-        p2->set_grid_position(15, 3);
-        add_entity(std::move(p2));
-
-        auto p3 = std::make_unique<pickaxe>(109, pickaxe_tex);
-        p3->set_grid_position(3, 8);
-        add_entity(std::move(p3));
-
-        // Coins (12 in total, target is 8)
-        std::vector<std::pair<int, int>> coin_positions = {
-            {5, 7}, {30, 7}, // Side rooms Stage 1
-            {17, 16},        // Behind Vampire
-            {11, 13}, {23, 13}, // Vampire side chambers (shifted away from y=14 static stones)
-            {12, 22}, {22, 22}, // Mummy chambers
-            {17, 25},
-            {4, 28}, {30, 28}, // Dragon corridors
-            {16, 32}, {18, 32} // Exit room
-        };
-        uint32_t coin_net_id = 300;
-        for (const auto& pos : coin_positions)
-        {
-            auto coin = std::make_unique<gold_coin>(coin_net_id++, coint_text);
-            coin->set_grid_position(pos.first, pos.second);
-            add_entity(std::move(coin));
-        }
-        m_target_gold = 8;
-
-        // Mummy triggers
-        m_mummy_triggers.clear();
-        m_mummy_triggers.push_back({12, 21, false, 0});
-        m_mummy_triggers.push_back({22, 21, false, 0});
-        m_mummy_triggers.push_back({17, 25, false, 0}); // Shifted away from y=24 static stones
-        m_next_dynamic_mummy_id = 5000;
-
-        // Diamonds (8 in total)
-        std::vector<std::pair<int, int>> diamond_positions = {
-            {6, 7}, {28, 7},
-            {10, 13}, {24, 13}, // Shifted away from y=14 static stones
-            {13, 23}, {21, 23},
-            {10, 30}, {24, 30}
-        };
-        uint32_t diamond_net_id = 400;
-        const zwodee::texture* blink_tex_ptr = m_blink_tex ? m_blink_tex.get() : fallback_tex_ptr;
-        for (const auto& pos : diamond_positions)
-        {
-            auto d = std::make_unique<diamond>(diamond_net_id++, get_random_diamond_texture(), blink_tex_ptr);
-            d->set_level(this);
-            d->set_grid_position(pos.first, pos.second);
-            add_entity(std::move(d));
-        }
-
-        // Garlic bulbs (Placed close to spawn for immediate testing)
-        std::vector<std::pair<int, int>> garlic_positions = {
-            {16, 3}, {16, 4}, {13, 13}, {21, 13}, {17, 18}
-        };
-        uint32_t garlic_net_id = 500;
-        for (const auto& pos : garlic_positions)
-        {
-            auto g = std::make_unique<garlic_bulb>(garlic_net_id++, garlic_tex);
-            g->set_grid_position(pos.first, pos.second);
-            add_entity(std::move(g));
-        }
-
-        // Onion bulbs (Placed close to spawn for immediate testing)
-        std::vector<std::pair<int, int>> onion_positions = {
-            {18, 2}, {18, 3}, {2, 7}, {32, 7}, {17, 8} // Shifted away from y=6 static stones
-        };
-        uint32_t onion_net_id = 600;
-        for (const auto& pos : onion_positions)
-        {
-            auto o = std::make_unique<onion_bulb>(onion_net_id++, onion_tex);
-            o->set_grid_position(pos.first, pos.second);
-            add_entity(std::move(o));
-        }
-
-        // Lamps (Plenty of lamps near spawn)
-        std::vector<std::pair<int, int>> lamp_positions = {
-            {18, 4}, {16, 11}, {17, 28} // Shifted away from puzzle2_stone2 at (17, 12)
-        };
-        uint32_t lamp_net_id = 700;
-        for (const auto& pos : lamp_positions)
-        {
-            auto l = std::make_unique<lamp>(lamp_net_id++, lamp_tex);
-            l->set_grid_position(pos.first, pos.second);
-            add_entity(std::move(l));
-        }
-
-        // Soldiers patrolling Stage 1 side chambers
-        const zwodee::texture* soldier_front = m_soldier_front_tex ? m_soldier_front_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* soldier_back = m_soldier_back_tex ? m_soldier_back_tex.get() : fallback_tex_ptr;
-        const zwodee::texture* soldier_side = m_soldier_side_tex ? m_soldier_side_tex.get() : fallback_tex_ptr;
-
-        auto s1 = std::make_unique<soldier>(10, soldier_front, soldier_back, soldier_side);
-        s1->set_grid_position(5, 8);
-        add_entity(std::move(s1));
-
-        auto s2 = std::make_unique<soldier>(110, soldier_front, soldier_back, soldier_side);
-        s2->set_grid_position(29, 8);
-        add_entity(std::move(s2));
-
-        // Add exit door at bottom center
-        auto door = std::make_unique<exit_door>(15, door_closed, door_open);
-        door->set_grid_position(17, 33);
-        m_exit_x = 17.0f * 32.0f;
-        m_exit_y = 33.0f * 32.0f;
-        add_entity(std::move(door));
+        
+        load_from_zwl("assets/levels/" + level_name + ".zwl");
     }
 
     void level::restart()
@@ -1499,7 +1017,7 @@ namespace digx
         m_fart_y = 0.0f;
 
         clear_level();
-        load_demo_level(*m_engine);
+        init(*m_engine, m_level_name);
     }
 
     player* level::get_player() const
@@ -1514,17 +1032,6 @@ namespace digx
         m_fart_y = y;
     }
 
-    const zwodee::texture* level::get_random_diamond_texture() const
-    {
-        if (m_diamond_textures.empty())
-        {
-            return m_fallback_tex.get();
-        }
-
-        const auto idx = static_cast<std::size_t>(std::rand()) % m_diamond_textures.size();
-        return m_diamond_textures[idx].get();
-    }
-
     bool level::is_tile_digged(int gx, int gy) const
     {
         if (gx < 0 || gx >= static_cast<int>(get_width()) ||
@@ -1537,7 +1044,7 @@ namespace digx
         size_t idx = static_cast<size_t>(gy) * get_width() + static_cast<size_t>(gx);
         if (idx < tiles.size() && tiles[idx])
         {
-            return tiles[idx]->get_texture() == m_digged_tex.get();
+            return tiles[idx]->get_texture() == texture_cache::get().digged_tex.get();
         }
         return false;
     }
@@ -1547,7 +1054,7 @@ namespace digx
         if (gx >= 0 && gx < static_cast<int>(get_width()) &&
             gy >= 0 && gy < static_cast<int>(get_height()))
         {
-            set_tile(gx, gy, 1, 0, m_digged_tex.get());
+            set_tile(gx, gy, 1, 0, texture_cache::get().digged_tex.get());
             size_t idx = static_cast<size_t>(gy) * get_width() + static_cast<size_t>(gx);
             if (idx < get_static_objects().size() && get_static_objects()[idx])
             {
@@ -1654,22 +1161,22 @@ namespace digx
 
         for (const auto& node : base_snapshot)
         {
-            bool is_rock = (node.tex && (node.tex == m_static_stone_textures[0].get() ||
-                                         node.tex == m_static_stone_textures[1].get() ||
-                                         node.tex == m_static_stone_textures[2].get() ||
-                                         node.tex == m_static_stone_textures[3].get()));
-            if (is_rock && m_dirt_tex)
+            bool is_rock = (node.tex && (node.tex == texture_cache::get().static_stone_textures[0].get() ||
+                                         node.tex == texture_cache::get().static_stone_textures[1].get() ||
+                                         node.tex == texture_cache::get().static_stone_textures[2].get() ||
+                                         node.tex == texture_cache::get().static_stone_textures[3].get()));
+            if (is_rock && texture_cache::get().dirt_tex.get())
             {
                 zwodee::render_node dirt_node;
                 dirt_node.x = node.x;
                 dirt_node.y = node.y;
                 dirt_node.w = node.w;
                 dirt_node.h = node.h;
-                dirt_node.tex = m_dirt_tex.get();
+                dirt_node.tex = texture_cache::get().dirt_tex.get();
                 dirt_node.src_x = 0;
                 dirt_node.src_y = 0;
-                dirt_node.src_w = m_dirt_tex->get_width();
-                dirt_node.src_h = m_dirt_tex->get_height();
+                dirt_node.src_w = texture_cache::get().dirt_tex->get_width();
+                dirt_node.src_h = texture_cache::get().dirt_tex->get_height();
                 dirt_node.flip_horizontal = false;
                 dirt_node.flip_vertical = true; // Use flip_vertical to mark dirt under rock
                 dirt_node.color_mod = 255;
@@ -1690,7 +1197,7 @@ namespace digx
                 dead_node.y = py;
                 dead_node.w = 32.0f;
                 dead_node.h = 32.0f;
-                dead_node.tex = m_player_dead_tex ? m_player_dead_tex.get() : m_fallback_tex.get();
+                dead_node.tex = texture_cache::get().player_dead_tex.get() ? texture_cache::get().player_dead_tex.get() : texture_cache::get().fallback_tex.get();
                 dead_node.src_x = 0;
                 dead_node.src_y = 0;
                 dead_node.src_w = dead_node.tex->get_width();
@@ -1729,18 +1236,18 @@ namespace digx
                 else if (progress < 0.666f) stage = 1;
                 else stage = 2;
 
-                if (m_dirt_breaking_texs[stage])
+                if (texture_cache::get().dirt_breaking_texs[stage])
                 {
                     zwodee::render_node break_node;
                     break_node.x = m_player->get_target_x();
                     break_node.y = m_player->get_target_y();
                     break_node.w = 32.0f;
                     break_node.h = 32.0f;
-                    break_node.tex = m_dirt_breaking_texs[stage].get();
+                    break_node.tex = texture_cache::get().dirt_breaking_texs[stage].get();
                     break_node.src_x = 0;
                     break_node.src_y = 0;
-                    break_node.src_w = m_dirt_breaking_texs[stage]->get_width();
-                    break_node.src_h = m_dirt_breaking_texs[stage]->get_height();
+                    break_node.src_w = texture_cache::get().dirt_breaking_texs[stage]->get_width();
+                    break_node.src_h = texture_cache::get().dirt_breaking_texs[stage]->get_height();
                     break_node.flip_horizontal = false;
                     break_node.flip_vertical = false;
                     break_node.color_mod = 255;
@@ -1751,10 +1258,11 @@ namespace digx
             // Apply level darkness and vertical depth gradient to dirt tiles
             for (auto& node : snapshot)
             {
-                if (node.tex && (node.tex == m_dirt_tex.get() ||
-                                 node.tex == m_dirt_breaking_texs[0].get() ||
-                                 node.tex == m_dirt_breaking_texs[1].get() ||
-                                 node.tex == m_dirt_breaking_texs[2].get()))
+                if (node.tex && (node.tex == texture_cache::get().dirt_tex.get() ||
+                                 node.tex == texture_cache::get().digged_tex.get() ||
+                                 node.tex == texture_cache::get().dirt_breaking_texs[0].get() ||
+                                 node.tex == texture_cache::get().dirt_breaking_texs[1].get() ||
+                                 node.tex == texture_cache::get().dirt_breaking_texs[2].get()))
                 {
                     // Calculate depth factor based on absolute level y coordinate (from y = 64 to y = 1024)
                     float depth_factor = (node.y - 64.0f) / (1024.0f - 64.0f);
@@ -1770,7 +1278,7 @@ namespace digx
             }
 
             // Add stretched header and footer nodes
-            if (m_bg_tex)
+            if (texture_cache::get().bg_tex.get())
             {
                 // Header (flipped horizontally)
                 zwodee::render_node header_node;
@@ -1778,11 +1286,11 @@ namespace digx
                 header_node.y = 0.0f;
                 header_node.w = static_cast<float>(get_width() * 32);
                 header_node.h = 32.0f;
-                header_node.tex = m_bg_tex.get();
+                header_node.tex = texture_cache::get().bg_tex.get();
                 header_node.src_x = 0;
                 header_node.src_y = 0;
-                header_node.src_w = m_bg_tex->get_width();
-                header_node.src_h = m_bg_tex->get_height();
+                header_node.src_w = texture_cache::get().bg_tex->get_width();
+                header_node.src_h = texture_cache::get().bg_tex->get_height();
                 header_node.flip_horizontal = true;
                 header_node.color_mod = 255;
                 snapshot.push_back(header_node);
@@ -1793,11 +1301,11 @@ namespace digx
                 footer_node.y = static_cast<float>((get_height() - 1) * 32);
                 footer_node.w = static_cast<float>(get_width() * 32);
                 footer_node.h = 32.0f;
-                footer_node.tex = m_bg_tex.get();
+                footer_node.tex = texture_cache::get().bg_tex.get();
                 footer_node.src_x = 0;
                 footer_node.src_y = 0;
-                footer_node.src_w = m_bg_tex->get_width();
-                footer_node.src_h = m_bg_tex->get_height();
+                footer_node.src_w = texture_cache::get().bg_tex->get_width();
+                footer_node.src_h = texture_cache::get().bg_tex->get_height();
                 footer_node.flip_horizontal = false;
                 footer_node.flip_vertical = true;
                 footer_node.color_mod = 255;
@@ -1805,7 +1313,7 @@ namespace digx
             }
 
             // Fart visual effect node
-            if (m_fart_effect_ticks > 0 && m_fart_tex)
+            if (m_fart_effect_ticks > 0 && texture_cache::get().fart_tex.get())
             {
                 float progress = 1.0f - (static_cast<float>(m_fart_effect_ticks) / 128.0f);
                 float alpha = 0.0f;
@@ -1824,11 +1332,11 @@ namespace digx
                 fart_node.y = m_fart_y;
                 fart_node.w = 32.0f;
                 fart_node.h = 32.0f;
-                fart_node.tex = m_fart_tex.get();
+                fart_node.tex = texture_cache::get().fart_tex.get();
                 fart_node.src_x = 0;
                 fart_node.src_y = 0;
-                fart_node.src_w = m_fart_tex->get_width();
-                fart_node.src_h = m_fart_tex->get_height();
+                fart_node.src_w = texture_cache::get().fart_tex->get_width();
+                fart_node.src_h = texture_cache::get().fart_tex->get_height();
                 fart_node.flip_horizontal = false;
                 fart_node.flip_vertical = false;
                 fart_node.is_ui = false;
@@ -1846,7 +1354,7 @@ namespace digx
             // Apply death sequence fade to the dead player texture
             for (auto& node : snapshot)
             {
-                if (node.tex == m_player_dead_tex.get())
+                if (node.tex == texture_cache::get().player_dead_tex.get())
                 {
                     float fade = 1.0f;
                     if (m_game_over)
@@ -1865,25 +1373,25 @@ namespace digx
             std::stable_sort(snapshot.begin(), snapshot.end(), [this](const zwodee::render_node& a, const zwodee::render_node& b) {
                 auto get_layer = [this](const zwodee::render_node& node) {
                     if (!node.tex) return 3;
-                    if (node.tex == m_bg_tex.get()) return 0;
-                    if (node.tex == m_digged_tex.get() || 
-                        node.tex == m_static_stone_textures[0].get() || node.tex == m_static_stone_textures[1].get() ||
-                        node.tex == m_static_stone_textures[2].get() || node.tex == m_static_stone_textures[3].get() ||
-                        node.tex == m_dirt_tex.get())
+                    if (node.tex == texture_cache::get().bg_tex.get()) return 0;
+                    if (node.tex == texture_cache::get().digged_tex.get() || 
+                        node.tex == texture_cache::get().static_stone_textures[0].get() || node.tex == texture_cache::get().static_stone_textures[1].get() ||
+                        node.tex == texture_cache::get().static_stone_textures[2].get() || node.tex == texture_cache::get().static_stone_textures[3].get() ||
+                        node.tex == texture_cache::get().dirt_tex.get())
                     {
                         return 1;
                     }
-                    if (node.tex == m_door_closed_tex.get() || node.tex == m_door_open_tex.get() ||
-                        node.tex == m_dirt_breaking_texs[0].get() ||
-                        node.tex == m_dirt_breaking_texs[1].get() ||
-                        node.tex == m_dirt_breaking_texs[2].get() ||
-                        (m_fart_tex && node.tex == m_fart_tex.get()) ||
-                        (m_vampire_sleeping_tex && node.tex == m_vampire_sleeping_tex.get()) ||
-                        (m_vampire_triggered_tex && node.tex == m_vampire_triggered_tex.get()))
+                    if (node.tex == texture_cache::get().door_closed_tex.get() || node.tex == texture_cache::get().door_open_tex.get() ||
+                        node.tex == texture_cache::get().dirt_breaking_texs[0].get() ||
+                        node.tex == texture_cache::get().dirt_breaking_texs[1].get() ||
+                        node.tex == texture_cache::get().dirt_breaking_texs[2].get() ||
+                        (texture_cache::get().fart_tex.get() && node.tex == texture_cache::get().fart_tex.get()) ||
+                        (texture_cache::get().vampire_sleeping_tex.get() && node.tex == texture_cache::get().vampire_sleeping_tex.get()) ||
+                        (texture_cache::get().vampire_triggered_tex.get() && node.tex == texture_cache::get().vampire_triggered_tex.get()))
                     {
                         return 2;
                     }
-                    if (node.tex == m_player_dead_tex.get())
+                    if (node.tex == texture_cache::get().player_dead_tex.get())
                     {
                         return 4;
                     }
@@ -1919,21 +1427,21 @@ namespace digx
             std::vector<hud_item> left_items;
             
             // Onion
-            left_items.push_back({m_onion_tex.get(), tx, icon_sz, ": " + std::to_string(m_player->get_onion_count()) + "    "});
+            left_items.push_back({texture_cache::get().onion_tex.get(), tx, icon_sz, ": " + std::to_string(m_player->get_onion_count()) + "    "});
             tx += icon_sz + 4.0f;
             float o_w = 0.0f;
             for (char c : left_items.back().text) o_w += m_font->get_glyph(c).xadvance * font_scale;
             tx += o_w;
 
             // Garlic
-            left_items.push_back({m_garlic_tex.get(), tx, icon_sz, ": " + std::to_string(m_player->get_garlic_count()) + "    "});
+            left_items.push_back({texture_cache::get().garlic_tex.get(), tx, icon_sz, ": " + std::to_string(m_player->get_garlic_count()) + "    "});
             tx += icon_sz + 4.0f;
             float g_w = 0.0f;
             for (char c : left_items.back().text) g_w += m_font->get_glyph(c).xadvance * font_scale;
             tx += g_w;
 
             // Coin
-            left_items.push_back({m_coin_tex.get(), tx, icon_sz, ": " + std::to_string(m_player->get_gold_count())});
+            left_items.push_back({texture_cache::get().coin_tex.get(), tx, icon_sz, ": " + std::to_string(m_player->get_gold_count())});
             tx += icon_sz + 4.0f;
             float c_w = 0.0f;
             for (char c : left_items.back().text) c_w += m_font->get_glyph(c).xadvance * font_scale;
@@ -2061,6 +1569,57 @@ namespace digx
             }
         }
 
+        if (m_game_won)
+        {
+            float screen_w = static_cast<float>(display_w);
+            float screen_h = static_cast<float>(display_h);
+
+            // 1. Semi-transparent gold overlay with blur effect
+            zwodee::render_node overlay_node{};
+            overlay_node.x = 0.0f;
+            overlay_node.y = 0.0f;
+            overlay_node.w = screen_w;
+            overlay_node.h = screen_h;
+            overlay_node.tex = nullptr;
+            overlay_node.is_ui = true;
+            overlay_node.is_blur = true;
+            overlay_node.r = 64; overlay_node.g = 48; overlay_node.b = 0; overlay_node.a = 180; // Dark gold overlay
+            snapshot.push_back(overlay_node);
+
+            if (m_font)
+            {
+                std::string win_text = "YOU WIN!";
+                float text_scale = 1.0f;
+                float text_w = 0.0f;
+                for (char c : win_text)
+                {
+                    text_w += m_font->get_glyph(c).xadvance * text_scale;
+                }
+                float tx = (screen_w - text_w) * 0.5f;
+                std::vector<zwodee::render_node> text_nodes = m_font->get_text_nodes(win_text, tx, 120.0f, text_scale, 255, 215, 0, 255);
+                for (auto& node : text_nodes) node.is_ui = true;
+                snapshot.insert(snapshot.end(), text_nodes.begin(), text_nodes.end());
+
+                std::string score_text = "Final Score: " + std::to_string(m_player ? m_player->get_score() : 0);
+                float score_scale = 0.6f;
+                float score_w = 0.0f;
+                for (char c : score_text)
+                {
+                    score_w += m_font->get_glyph(c).xadvance * score_scale;
+                }
+                float sx = (screen_w - score_w) * 0.5f;
+                std::vector<zwodee::render_node> score_nodes = m_font->get_text_nodes(score_text, sx, 200.0f, score_scale, 255, 255, 255, 255);
+                for (auto& node : score_nodes) node.is_ui = true;
+                snapshot.insert(snapshot.end(), score_nodes.begin(), score_nodes.end());
+
+                // 3. Render Buttons
+                for (size_t i = 0; i < m_game_won_buttons.size(); ++i)
+                {
+                    m_game_won_buttons[i].add_to_snapshot(snapshot, *m_font, m_game_won_selected_index == static_cast<int>(i));
+                }
+            }
+        }
+
         // Append Pause Menu overlay and buttons at the end of snapshot (renders on top, no camera offset)
         if (m_is_paused)
         {
@@ -2125,5 +1684,236 @@ namespace digx
         }
  
         return snapshot;
+    }
+
+    void level::load_from_zwl(const std::string& path)
+    {
+        std::ifstream in(path, std::ios::binary);
+        if (!in)
+        {
+            return;
+        }
+
+        zwodee::level_header header;
+        if (!in.read(reinterpret_cast<char*>(&header), sizeof(header)))
+        {
+            return;
+        }
+
+        if (std::string_view(header.magic, 4) != std::string_view("ZWL\0", 4))
+        {
+            return;
+        }
+
+        resize(header.width, header.height);
+        
+        // Read tiles
+        for (uint32_t i = 0; i < header.tile_count; ++i)
+        {
+            zwodee::binary_tile bt;
+            if (!in.read(reinterpret_cast<char*>(&bt), sizeof(bt))) break;
+
+            uint32_t x = i % header.width;
+            uint32_t y = i / header.width;
+
+            const zwodee::texture* tex = nullptr;
+            
+            if (bt.tile_id == 0)
+            {
+                bt.tile_id = 1;
+                bt.flags = 0;
+                tex = texture_cache::get().digged_tex.get();
+            }
+            else if (bt.tile_id == 1) tex = texture_cache::get().dirt_tex.get();
+            else if (bt.tile_id == 2) tex = texture_cache::get().static_stone_textures[std::rand() % 4].get();
+
+            if (!tex && bt.tile_id != 0)
+                tex = texture_cache::get().fallback_tex.get();
+
+            set_tile(x, y, bt.tile_id, bt.flags, tex);
+            
+            size_t idx = static_cast<size_t>(y) * get_width() + static_cast<size_t>(x);
+            if (idx < get_static_objects().size() && get_static_objects()[idx])
+            {
+                get_static_objects()[idx]->set_collidable(bt.flags & 1);
+                
+                if (bt.tile_id == 1)
+                {
+                    get_static_objects()[idx]->set_collidable(false);
+                    get_static_objects()[idx]->set_flip_horizontal(std::rand() % 2 == 0);
+                }
+                else if (bt.tile_id == 2)
+                {
+                    get_static_objects()[idx]->set_collidable(true);
+                }
+            }
+        }
+
+        uint32_t next_stone_id = 800;
+        m_target_gold = 0;
+
+        // Read entities
+        for (uint32_t i = 0; i < header.entity_count; ++i)
+        {
+            zwodee::binary_entity be;
+            if (!in.read(reinterpret_cast<char*>(&be), sizeof(be))) break;
+
+            int gx = static_cast<int>(std::round(be.x / 32.0f));
+            int gy = static_cast<int>(std::round(be.y / 32.0f));
+            
+            if (be.type_id == 1) // Player
+            {
+                auto goblin = std::make_unique<player>(1, m_engine ? &m_engine->get_audio_manager() : nullptr);
+                goblin->set_grid_bounds(get_width(), get_height());
+                goblin->set_level(this);
+                goblin->set_grid_position(gx, gy);
+                m_player = goblin.get();
+                
+                if (m_has_persisted_state)
+                {
+                    m_player->apply_persistent_state(
+                        m_persisted_state.score,
+                        m_persisted_state.diamonds,
+                        m_persisted_state.garlic,
+                        m_persisted_state.onion,
+                        m_persisted_state.has_pickaxe
+                    );
+                }
+
+                add_entity(std::move(goblin));
+            }
+            else if (be.type_id == 10) // Mummy
+            {
+                auto m = std::make_unique<mummy>(m_next_dynamic_mummy_id++);
+                m->set_grid_position(gx, gy);
+                m->trigger_spawn(); 
+                add_entity(std::move(m));
+            }
+            else if (be.type_id == 11) // Soldier
+            {
+                auto s = std::make_unique<soldier>(m_next_dynamic_mummy_id++);
+                s->set_grid_position(gx, gy);
+                add_entity(std::move(s));
+            }
+            else if (be.type_id == 12) // Vampire
+            {
+                auto v = std::make_unique<vampire>(m_next_dynamic_mummy_id++);
+                v->set_grid_position(gx, gy);
+                add_entity(std::move(v));
+            }
+            else if (be.type_id == 13) // Dragon
+            {
+                auto d = std::make_unique<dragon>(m_next_dynamic_mummy_id++);
+                d->set_grid_position(gx, gy);
+                add_entity(std::move(d));
+            }
+            else if (be.type_id == 20) // Stone
+            {
+                stone::stone_color col = stone::color_mid;
+                if (be.health == 100) col = stone::color_high;
+                else if (be.health == 50) col = stone::color_mid;
+                else col = stone::color_low;
+                
+                auto s = std::make_unique<stone>(next_stone_id++, col);
+                s->set_grid_position(gx, gy);
+                add_entity(std::move(s));
+            }
+            else if (be.type_id == 21) // Diamond
+            {
+                auto d = std::make_unique<diamond>(next_stone_id++);
+                d->set_grid_position(gx, gy);
+                add_entity(std::move(d));
+            }
+            else if (be.type_id == 22) // Gold Coin
+            {
+                auto c = std::make_unique<gold_coin>(next_stone_id++);
+                c->set_grid_position(gx, gy);
+                add_entity(std::move(c));
+                m_target_gold++;
+            }
+            else if (be.type_id == 23) // Lamp
+            {
+                auto l = std::make_unique<lamp>(next_stone_id++);
+                l->set_grid_position(gx, gy);
+                add_entity(std::move(l));
+            }
+            else if (be.type_id == 24) // Garlic
+            {
+                auto g = std::make_unique<garlic_bulb>(next_stone_id++);
+                g->set_grid_position(gx, gy);
+                add_entity(std::move(g));
+            }
+            else if (be.type_id == 25) // Onion
+            {
+                auto o = std::make_unique<onion_bulb>(next_stone_id++);
+                o->set_grid_position(gx, gy);
+                add_entity(std::move(o));
+            }
+            else if (be.type_id == 26) // Pickaxe
+            {
+                auto p = std::make_unique<pickaxe>(next_stone_id++);
+                p->set_grid_position(gx, gy);
+                add_entity(std::move(p));
+            }
+            else if (be.type_id == 27) // Exit door
+            {
+                auto door = std::make_unique<exit_door>(15);
+                door->set_grid_position(gx, gy);
+                m_exit_x = static_cast<float>(gx * 32);
+                m_exit_y = static_cast<float>(gy * 32);
+                add_entity(std::move(door));
+            }
+        }
+
+        if (header.target_score != -1)
+        {
+            m_target_gold = header.target_score;
+        }
+    }
+
+    void level::set_persistent_state(const player_persistent_state& state)
+    {
+        m_persisted_state = state;
+        m_has_persisted_state = true;
+    }
+
+    void level::advance_to_next_level()
+    {
+        int next_level = m_level_number + 1;
+        std::string next_file = "assets/levels/level" + std::to_string(next_level) + ".zwl";
+        
+        std::ifstream f(next_file);
+        if (f.good())
+        {
+            f.close();
+            // Load next level
+            auto new_level = std::make_unique<digx::level>(get_width(), get_height(), next_level);
+            new_level->init(*m_engine, "level" + std::to_string(next_level));
+            
+            player_persistent_state state;
+            if (m_player)
+            {
+                state.score = m_player->get_score();
+                state.diamonds = m_player->get_diamond_count();
+                state.garlic = m_player->get_garlic_count();
+                state.onion = m_player->get_onion_count();
+                state.has_pickaxe = m_player->has_pickaxe();
+            }
+            new_level->set_persistent_state(state);
+            
+            std::string level_id = "play_level_" + std::to_string(next_level);
+            m_engine->get_level_manager().register_level(level_id, std::move(new_level));
+            m_engine->get_level_manager().transition_to(level_id);
+        }
+        else
+        {
+            // WINNER!
+            m_game_won = true;
+            m_game_won_selected_index = 0;
+            if (auto* audio = m_player ? m_player->get_audio_manager() : nullptr)
+            {
+                audio->play_sound("coin_collected"); // Fallback win sound
+            }
+        }
     }
 }

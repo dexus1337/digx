@@ -20,15 +20,15 @@ namespace digx
     class diamond : public zwodee::entity
     {
     public:
-        diamond(uint32_t network_id, const zwodee::texture* tex, const zwodee::texture* blink_tex);
+        diamond(uint32_t network_id);
 
         void tick() override;
 
         void set_revealed(bool reveal);
-        [[nodiscard]] bool is_revealed() const;
+        bool is_revealed() const;
 
         void set_permanently_revealed(bool perm);
-        [[nodiscard]] bool is_permanently_revealed() const;
+        bool is_permanently_revealed() const;
 
         void set_level(zwodee::tile_level* lvl);
 
@@ -38,7 +38,6 @@ namespace digx
     private:
         bool m_is_revealed = false;
         bool m_permanently_revealed = false;
-        const zwodee::texture* m_blink_tex = nullptr;
         zwodee::tile_level* m_level = nullptr;
         float m_blink_timer = 0.0f;
     };

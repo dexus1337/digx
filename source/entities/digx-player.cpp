@@ -1,4 +1,5 @@
 #include "entities/digx-player.hpp"
+#include "assets/texture-cache.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -29,25 +30,8 @@ namespace
 
 namespace digx
 {
-    player::player(uint32_t network_id, 
-                   const zwodee::texture* shovel_idle_tex, 
-                   const zwodee::texture* shovel_running_tex, 
-                   const zwodee::texture* shovel_running_up_tex,
-                   const zwodee::texture* shovel_running_down_tex,
-                   const zwodee::texture* pickaxe_idle_tex, 
-                   const zwodee::texture* pickaxe_running_tex, 
-                   const zwodee::texture* pickaxe_running_up_tex,
-                   const zwodee::texture* pickaxe_running_down_tex,
-                   zwodee::audio_manager* audio)
-        : zwodee::entity_player(network_id, shovel_idle_tex, 100),
-          m_shovel_idle_tex(shovel_idle_tex),
-          m_shovel_running_tex(shovel_running_tex),
-          m_shovel_running_up_tex(shovel_running_up_tex),
-          m_shovel_running_down_tex(shovel_running_down_tex),
-          m_pickaxe_idle_tex(pickaxe_idle_tex),
-          m_pickaxe_running_tex(pickaxe_running_tex),
-          m_pickaxe_running_up_tex(pickaxe_running_up_tex),
-          m_pickaxe_running_down_tex(pickaxe_running_down_tex),
+    player::player(uint32_t network_id, zwodee::audio_manager* audio)
+        : zwodee::entity_player(network_id, texture_cache::get().player_shovel_tex.get(), 100),
           m_audio(audio)
     {
         set_speed(m_tunnel_speed);
@@ -504,33 +488,35 @@ namespace digx
         int run_frame_idx = (m_run_anim_ticks / 17) % 2;
 
         const zwodee::texture* target_tex = nullptr;
+        auto& tc = texture_cache::get();
+
         if (m_is_digging)
         {
             int frame_idx = (m_digging_ticks_remaining / 17) % 2;
             if (m_has_pickaxe)
             {
-                if (m_dir_y < 0.0f) target_tex = m_pickaxe_dig_up_texs[frame_idx];
-                else if (m_dir_y > 0.0f) target_tex = m_pickaxe_dig_down_texs[frame_idx];
-                else target_tex = m_pickaxe_dig_texs[frame_idx];
+                if (m_dir_y < 0.0f) target_tex = tc.player_digging_pickaxe_up_tex[frame_idx].get();
+                else if (m_dir_y > 0.0f) target_tex = tc.player_digging_pickaxe_down_tex[frame_idx].get();
+                else target_tex = tc.player_digging_pickaxe_tex[frame_idx].get();
 
                 if (!target_tex)
                 {
-                    if (m_dir_y < 0.0f) target_tex = m_pickaxe_running_up_texs[run_frame_idx] ? m_pickaxe_running_up_texs[run_frame_idx] : m_pickaxe_running_up_tex;
-                    else if (m_dir_y > 0.0f) target_tex = m_pickaxe_running_down_texs[run_frame_idx] ? m_pickaxe_running_down_texs[run_frame_idx] : m_pickaxe_running_down_tex;
-                    else target_tex = m_pickaxe_running_texs[run_frame_idx] ? m_pickaxe_running_texs[run_frame_idx] : m_pickaxe_running_tex;
+                    if (m_dir_y < 0.0f) target_tex = tc.player_pickaxe_running_up_texs[run_frame_idx] ? tc.player_pickaxe_running_up_texs[run_frame_idx].get() : tc.player_pickaxe_running_up_tex.get();
+                    else if (m_dir_y > 0.0f) target_tex = tc.player_pickaxe_running_down_texs[run_frame_idx] ? tc.player_pickaxe_running_down_texs[run_frame_idx].get() : tc.player_pickaxe_running_down_tex.get();
+                    else target_tex = tc.player_pickaxe_running_texs[run_frame_idx] ? tc.player_pickaxe_running_texs[run_frame_idx].get() : tc.player_pickaxe_running_tex.get();
                 }
             }
             else
             {
-                if (m_dir_y < 0.0f) target_tex = m_shovel_dig_up_texs[frame_idx];
-                else if (m_dir_y > 0.0f) target_tex = m_shovel_dig_down_texs[frame_idx];
-                else target_tex = m_shovel_dig_texs[frame_idx];
+                if (m_dir_y < 0.0f) target_tex = tc.player_digging_shovel_up_tex[frame_idx].get();
+                else if (m_dir_y > 0.0f) target_tex = tc.player_digging_shovel_down_tex[frame_idx].get();
+                else target_tex = tc.player_digging_shovel_tex[frame_idx].get();
 
                 if (!target_tex)
                 {
-                    if (m_dir_y < 0.0f) target_tex = m_shovel_running_up_texs[run_frame_idx] ? m_shovel_running_up_texs[run_frame_idx] : m_shovel_running_up_tex;
-                    else if (m_dir_y > 0.0f) target_tex = m_shovel_running_down_texs[run_frame_idx] ? m_shovel_running_down_texs[run_frame_idx] : m_shovel_running_down_tex;
-                    else target_tex = m_shovel_running_texs[run_frame_idx] ? m_shovel_running_texs[run_frame_idx] : m_shovel_running_tex;
+                    if (m_dir_y < 0.0f) target_tex = tc.player_shovel_running_up_texs[run_frame_idx] ? tc.player_shovel_running_up_texs[run_frame_idx].get() : tc.player_shovel_running_up_tex.get();
+                    else if (m_dir_y > 0.0f) target_tex = tc.player_shovel_running_down_texs[run_frame_idx] ? tc.player_shovel_running_down_texs[run_frame_idx].get() : tc.player_shovel_running_down_tex.get();
+                    else target_tex = tc.player_shovel_running_texs[run_frame_idx] ? tc.player_shovel_running_texs[run_frame_idx].get() : tc.player_shovel_running_tex.get();
                 }
             }
         }
@@ -540,20 +526,20 @@ namespace digx
             {
                 if (m_dir_y < 0.0f)
                 {
-                    target_tex = m_pickaxe_running_up_texs[run_frame_idx] ? m_pickaxe_running_up_texs[run_frame_idx] : m_pickaxe_running_up_tex;
+                    target_tex = tc.player_pickaxe_running_up_texs[run_frame_idx] ? tc.player_pickaxe_running_up_texs[run_frame_idx].get() : tc.player_pickaxe_running_up_tex.get();
                 }
                 else if (m_dir_y > 0.0f)
                 {
-                    target_tex = m_pickaxe_running_down_texs[run_frame_idx] ? m_pickaxe_running_down_texs[run_frame_idx] : m_pickaxe_running_down_tex;
+                    target_tex = tc.player_pickaxe_running_down_texs[run_frame_idx] ? tc.player_pickaxe_running_down_texs[run_frame_idx].get() : tc.player_pickaxe_running_down_tex.get();
                 }
                 else
                 {
-                    target_tex = m_pickaxe_running_texs[run_frame_idx] ? m_pickaxe_running_texs[run_frame_idx] : m_pickaxe_running_tex;
+                    target_tex = tc.player_pickaxe_running_texs[run_frame_idx] ? tc.player_pickaxe_running_texs[run_frame_idx].get() : tc.player_pickaxe_running_tex.get();
                 }
             }
             else
             {
-                target_tex = m_pickaxe_idle_tex;
+                target_tex = tc.player_pickaxe_tex.get();
             }
         }
         else
@@ -562,20 +548,20 @@ namespace digx
             {
                 if (m_dir_y < 0.0f)
                 {
-                    target_tex = m_shovel_running_up_texs[run_frame_idx] ? m_shovel_running_up_texs[run_frame_idx] : m_shovel_running_up_tex;
+                    target_tex = tc.player_shovel_running_up_texs[run_frame_idx] ? tc.player_shovel_running_up_texs[run_frame_idx].get() : tc.player_shovel_running_up_tex.get();
                 }
                 else if (m_dir_y > 0.0f)
                 {
-                    target_tex = m_shovel_running_down_texs[run_frame_idx] ? m_shovel_running_down_texs[run_frame_idx] : m_shovel_running_down_tex;
+                    target_tex = tc.player_shovel_running_down_texs[run_frame_idx] ? tc.player_shovel_running_down_texs[run_frame_idx].get() : tc.player_shovel_running_down_tex.get();
                 }
                 else
                 {
-                    target_tex = m_shovel_running_texs[run_frame_idx] ? m_shovel_running_texs[run_frame_idx] : m_shovel_running_tex;
+                    target_tex = tc.player_shovel_running_texs[run_frame_idx] ? tc.player_shovel_running_texs[run_frame_idx].get() : tc.player_shovel_running_tex.get();
                 }
             }
             else
             {
-                target_tex = m_shovel_idle_tex;
+                target_tex = tc.player_shovel_tex.get();
             }
         }
         if (target_tex)
@@ -623,6 +609,15 @@ namespace digx
     void player::obtain_pickaxe()
     {
         m_has_pickaxe = true;
+    }
+
+    void player::apply_persistent_state(int score, int diamonds, int garlic, int onion, bool pickaxe)
+    {
+        m_score = score;
+        m_diamonds_collected = diamonds;
+        m_garlic_count = garlic;
+        m_onion_count = onion;
+        m_has_pickaxe = pickaxe;
     }
 
     int player::get_gold_count() const
@@ -811,51 +806,5 @@ namespace digx
         }
 
         return true;
-    }
-
-    void player::set_digging_textures(
-        const zwodee::texture* shovel_dig_1, const zwodee::texture* shovel_dig_2,
-        const zwodee::texture* shovel_dig_up_1, const zwodee::texture* shovel_dig_up_2,
-        const zwodee::texture* shovel_dig_down_1, const zwodee::texture* shovel_dig_down_2,
-        const zwodee::texture* pickaxe_dig_1, const zwodee::texture* pickaxe_dig_2,
-        const zwodee::texture* pickaxe_dig_up_1, const zwodee::texture* pickaxe_dig_up_2,
-        const zwodee::texture* pickaxe_dig_down_1, const zwodee::texture* pickaxe_dig_down_2
-    )
-    {
-        m_shovel_dig_texs[0] = shovel_dig_1;
-        m_shovel_dig_texs[1] = shovel_dig_2;
-        m_shovel_dig_up_texs[0] = shovel_dig_up_1;
-        m_shovel_dig_up_texs[1] = shovel_dig_up_2;
-        m_shovel_dig_down_texs[0] = shovel_dig_down_1;
-        m_shovel_dig_down_texs[1] = shovel_dig_down_2;
-        m_pickaxe_dig_texs[0] = pickaxe_dig_1;
-        m_pickaxe_dig_texs[1] = pickaxe_dig_2;
-        m_pickaxe_dig_up_texs[0] = pickaxe_dig_up_1;
-        m_pickaxe_dig_up_texs[1] = pickaxe_dig_up_2;
-        m_pickaxe_dig_down_texs[0] = pickaxe_dig_down_1;
-        m_pickaxe_dig_down_texs[1] = pickaxe_dig_down_2;
-    }
-
-    void player::set_running_textures(
-        const zwodee::texture* shovel_run_1, const zwodee::texture* shovel_run_2,
-        const zwodee::texture* shovel_run_up_1, const zwodee::texture* shovel_run_up_2,
-        const zwodee::texture* shovel_run_down_1, const zwodee::texture* shovel_run_down_2,
-        const zwodee::texture* pickaxe_run_1, const zwodee::texture* pickaxe_run_2,
-        const zwodee::texture* pickaxe_run_up_1, const zwodee::texture* pickaxe_run_up_2,
-        const zwodee::texture* pickaxe_run_down_1, const zwodee::texture* pickaxe_run_down_2
-    )
-    {
-        m_shovel_running_texs[0] = shovel_run_1;
-        m_shovel_running_texs[1] = shovel_run_2;
-        m_shovel_running_up_texs[0] = shovel_run_up_1;
-        m_shovel_running_up_texs[1] = shovel_run_up_2;
-        m_shovel_running_down_texs[0] = shovel_run_down_1;
-        m_shovel_running_down_texs[1] = shovel_run_down_2;
-        m_pickaxe_running_texs[0] = pickaxe_run_1;
-        m_pickaxe_running_texs[1] = pickaxe_run_2;
-        m_pickaxe_running_up_texs[0] = pickaxe_run_up_1;
-        m_pickaxe_running_up_texs[1] = pickaxe_run_up_2;
-        m_pickaxe_running_down_texs[0] = pickaxe_run_down_1;
-        m_pickaxe_running_down_texs[1] = pickaxe_run_down_2;
     }
 }

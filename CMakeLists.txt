@@ -68,17 +68,21 @@ get_filename_component(zwodee_dir_DIR ${zwodee_dir} DIRECTORY)
 if(CMAKE_BUILD_TYPE MATCHES "Debug")
     if(WIN32)
         set(OUTPUT_ASSETS_DIR "${zwodee_dir}/out/build/windows-x64-debug/bin/assets")
+        set(COMPILER_EXE "${zwodee_dir}/out/build/windows-x64-debug/bin/tools/zwodee-level-compiler.exe")
         set_target_properties(digx PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${zwodee_dir}/out/build/windows-x64-debug/bin")
     else()
         set(OUTPUT_ASSETS_DIR "${zwodee_dir}/out/build/linux-x64-debug/bin/assets")
+        set(COMPILER_EXE "${zwodee_dir}/out/build/linux-x64-debug/bin/tools/zwodee-level-compiler")
         set_target_properties(digx PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${zwodee_dir}/out/build/linux-x64-debug/bin")
     endif()
 else()
     if(WIN32)
         set(OUTPUT_ASSETS_DIR "${zwodee_dir}/out/build/windows-x64-release/bin/assets")
+        set(COMPILER_EXE "${zwodee_dir}/out/build/windows-x64-release/bin/tools/zwodee-level-compiler.exe")
         set_target_properties(digx PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${zwodee_dir}/out/build/windows-x64-release/bin")
     else()
         set(OUTPUT_ASSETS_DIR "${zwodee_dir}/out/build/linux-x64-release/bin/assets")
+        set(COMPILER_EXE "${zwodee_dir}/out/build/linux-x64-release/bin/tools/zwodee-level-compiler")
         set_target_properties(digx PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${zwodee_dir}/out/build/linux-x64-release/bin")
     endif()
 endif()
@@ -99,3 +103,24 @@ add_custom_target(copy_assets ALL
 
 # Force the main executable to depend on the assets copy target
 add_dependencies(digx copy_assets)
+
+# Compile Tiled JSON levels to .zwl
+add_custom_target(compile_levels ALL
+    COMMENT "Compiling Tiled levels..."
+)
+file(GLOB_RECURSE level_json_files CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/levels/*.json" "${CMAKE_CURRENT_SOURCE_DIR}/tiled-assets/*.json")
+
+foreach(json_file ${level_json_files})
+    get_filename_component(file_name ${json_file} NAME_WE)
+    set(output_file "${OUTPUT_ASSETS_DIR}/levels/${file_name}.zwl")
+
+    add_custom_command(
+        TARGET compile_levels
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${OUTPUT_ASSETS_DIR}/levels"
+        COMMAND ${COMPILER_EXE} "${json_file}" "${output_file}"
+        DEPENDS "${json_file}"
+        COMMENT "Compiling level: ${file_name}.json"
+    )
+endforeach()
+
+add_dependencies(digx compile_levels)

@@ -12,7 +12,7 @@ namespace digx
         button(const std::string& text, float x, float y, float w, float h)
             : m_text(text), m_x(x), m_y(y), m_w(w), m_h(h) {}
 
-        [[nodiscard]] bool is_hovered(float mx, float my) const
+        bool is_hovered(float mx, float my) const
         {
             return mx >= m_x && mx <= m_x + m_w && my >= m_y && my <= m_y + m_h;
         }
@@ -90,11 +90,11 @@ namespace digx
             snapshot.insert(snapshot.end(), text_nodes.begin(), text_nodes.end());
         }
 
-        [[nodiscard]] float get_x() const { return m_x; }
-        [[nodiscard]] float get_y() const { return m_y; }
-        [[nodiscard]] float get_w() const { return m_w; }
-        [[nodiscard]] float get_h() const { return m_h; }
-        [[nodiscard]] const std::string& get_text() const { return m_text; }
+        float get_x() const { return m_x; }
+        float get_y() const { return m_y; }
+        float get_w() const { return m_w; }
+        float get_h() const { return m_h; }
+        const std::string& get_text() const { return m_text; }
 
     private:
         std::string m_text;

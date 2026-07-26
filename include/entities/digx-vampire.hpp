@@ -17,19 +17,18 @@ namespace digx
     class vampire : public zwodee::entity
     {
     public:
-        vampire(uint32_t network_id, const zwodee::texture* sleeping_tex, const zwodee::texture* triggered_tex);
+        vampire(uint32_t network_id);
 
         void tick() override;
 
         void update_behavior(player* player);
 
-        [[nodiscard]] bool is_active() const;
-        [[nodiscard]] bool is_neutralized() const;
+        bool is_active() const;
+        bool is_neutralized() const;
 
     private:
-        const zwodee::texture* m_sleeping_tex = nullptr;
-        const zwodee::texture* m_triggered_tex = nullptr;
         bool m_is_active = false;
         bool m_is_neutralized = false;
+        zwodee::render_node m_snorZ{};
     };
 }

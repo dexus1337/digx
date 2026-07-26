@@ -1,15 +1,14 @@
 #include "entities/digx-vampire.hpp"
 #include "entities/digx-player.hpp"
 #include "levels/digx-level.hpp"
+#include "assets/texture-cache.hpp"
 
 #include <cmath>
 
 namespace digx
 {
-    vampire::vampire(uint32_t network_id, const zwodee::texture* sleeping_tex, const zwodee::texture* triggered_tex)
-        : zwodee::entity(network_id, sleeping_tex, 50),
-          m_sleeping_tex(sleeping_tex),
-          m_triggered_tex(triggered_tex)
+    vampire::vampire(uint32_t network_id)
+        : zwodee::entity(network_id, texture_cache::get().vampire_sleeping_tex.get(), 50)
     {
         m_width = 32.0f;
         m_height = 32.0f;
@@ -24,10 +23,11 @@ namespace digx
     {
         m_vx = 0.0f;
         m_vy = 0.0f;
+        auto& tc = texture_cache::get();
 
         if (!player || m_is_neutralized)
         {
-            set_texture(m_sleeping_tex);
+            set_texture(tc.vampire_sleeping_tex.get());
             return;
         }
 
@@ -48,7 +48,7 @@ namespace digx
 
         if (m_is_active)
         {
-            set_texture(m_triggered_tex);
+            set_texture(tc.vampire_triggered_tex.get());
             if (!was_active)
             {
                 if (auto* audio = player->get_audio_manager())
@@ -59,14 +59,27 @@ namespace digx
         }
         else
         {
-            set_texture(m_sleeping_tex);
+            if (auto tex = texture_cache::get().vampire_sleeping_tex.get())
+            {
+                float fw = static_cast<float>(tex->get_width());
+                float fh = static_cast<float>(tex->get_height());
+                m_snorZ.tex = tex;
+                m_snorZ.src_x = 0;
+                m_snorZ.src_y = 0;
+                m_snorZ.src_w = static_cast<int>(fw);
+                m_snorZ.src_h = static_cast<int>(fh);
+                m_snorZ.w = fw;
+                m_snorZ.h = fh;
+                m_snorZ.is_ui = false;
+            }
+            set_texture(tc.vampire_sleeping_tex.get());
         }
 
         if (m_is_active && player->get_breath_active_time() > 0.0f)
         {
             m_is_neutralized = true;
             m_is_active = false;
-            set_texture(m_sleeping_tex);
+            set_texture(texture_cache::get().vampire_sleeping_tex.get());
             return;
         }
 
@@ -77,7 +90,7 @@ namespace digx
                 player->use_garlic();
                 m_is_neutralized = true;
                 m_is_active = false;
-                set_texture(m_sleeping_tex);
+                set_texture(texture_cache::get().vampire_sleeping_tex.get());
             }
             else
             {

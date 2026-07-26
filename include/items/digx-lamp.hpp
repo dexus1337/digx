@@ -15,12 +15,12 @@ namespace digx
     class lamp : public zwodee::entity
     {
     public:
-        lamp(uint32_t network_id, const zwodee::texture* tex);
+        lamp(uint32_t network_id);
 
         void tick() override;
 
         void set_target_diamond(class diamond* target);
-        [[nodiscard]] class diamond* get_target_diamond() const;
+        class diamond* get_target_diamond() const;
 
     private:
         class diamond* m_target_diamond = nullptr;

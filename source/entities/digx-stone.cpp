@@ -1,10 +1,21 @@
 #include "entities/digx-stone.hpp"
+#include "assets/texture-cache.hpp"
 #include <cmath>
 
 namespace digx
 {
-    stone::stone(uint32_t network_id, const zwodee::texture* tex, stone_color col)
-        : zwodee::entity(network_id, tex, 100), m_color(col)
+    namespace
+    {
+        const zwodee::texture* get_stone_tex(stone::stone_color col)
+        {
+            if (col == stone::color_high) return texture_cache::get().stone_high_tex.get();
+            if (col == stone::color_mid) return texture_cache::get().stone_mid_tex.get();
+            return texture_cache::get().stone_low_tex.get();
+        }
+    }
+
+    stone::stone(uint32_t network_id, stone_color col)
+        : zwodee::entity(network_id, get_stone_tex(col), 100), m_color(col)
     {
         configure_animator(1, 1, false);
     }

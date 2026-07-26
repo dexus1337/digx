@@ -15,7 +15,7 @@ namespace digx
     class pickaxe : public zwodee::entity
     {
     public:
-        pickaxe(uint32_t network_id, const zwodee::texture* tex);
+        pickaxe(uint32_t network_id);
 
         void tick() override;
     };

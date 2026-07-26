@@ -1,12 +1,13 @@
 #include "items/digx-diamond.hpp"
 #include "levels/digx-level.hpp"
+#include "assets/texture-cache.hpp"
 #include <cmath>
 #include <cstdlib>
 
 namespace digx
 {
-    diamond::diamond(uint32_t network_id, const zwodee::texture* tex, const zwodee::texture* blink_tex)
-        : zwodee::entity(network_id, tex, 1), m_blink_tex(blink_tex)
+    diamond::diamond(uint32_t network_id)
+        : zwodee::entity(network_id, texture_cache::get().diamond_textures.empty() ? nullptr : texture_cache::get().diamond_textures[std::rand() % texture_cache::get().diamond_textures.size()].get(), 1)
     {
         m_width = 32.0f;
         m_height = 32.0f;
@@ -75,11 +76,12 @@ namespace digx
         {
             zwodee::entity::render(target_renderer, alpha);
         }
-        else if (m_blink_tex && m_blink_timer <= 0.5f)
+        else if (texture_cache::get().blink_tex && m_blink_timer <= 0.5f)
         {
             float render_x = m_x + (m_vx * static_cast<float>(alpha));
             float render_y = m_y + (m_vy * static_cast<float>(alpha));
-            target_renderer.draw_sprite(*m_blink_tex, 0, 0, m_blink_tex->get_width(), m_blink_tex->get_height(), render_x, render_y, m_width, m_height);
+            auto blink = texture_cache::get().blink_tex.get();
+            target_renderer.draw_sprite(*blink, 0, 0, blink->get_width(), blink->get_height(), render_x, render_y, m_width, m_height);
         }
     }
 
@@ -104,13 +106,14 @@ namespace digx
         {
             return zwodee::entity::get_render_node();
         }
-        else if (m_blink_tex && m_blink_timer <= 0.5f)
+        else if (texture_cache::get().blink_tex && m_blink_timer <= 0.5f)
         {
-            return zwodee::render_node{ m_x, m_y, m_width, m_height, m_blink_tex, 0, 0, m_blink_tex->get_width(), m_blink_tex->get_height() };
+            auto blink = texture_cache::get().blink_tex.get();
+            return zwodee::render_node{ m_x, m_y, m_width, m_height, blink, 0, 0, blink->get_width(), blink->get_height() };
         }
         else
         {
-            return zwodee::render_node{ m_x, m_y, 0.0f, 0.0f, m_blink_tex, 0, 0, 0, 0 };
+            return zwodee::render_node{ m_x, m_y, 0.0f, 0.0f, texture_cache::get().blink_tex.get(), 0, 0, 0, 0 };
         }
     }
 }

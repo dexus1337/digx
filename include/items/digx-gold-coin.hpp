@@ -15,7 +15,7 @@ namespace digx
     class gold_coin : public zwodee::entity
     {
     public:
-        gold_coin(uint32_t network_id, const zwodee::texture* tex);
+        gold_coin(uint32_t network_id);
 
         void tick() override;
     };
