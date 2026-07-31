@@ -85,6 +85,8 @@ namespace digx
         zwodee::input_state m_current_input{};
         std::unique_ptr<zwodee::font> m_font;
         std::vector<button> m_pause_buttons;
+        uint32_t m_ignored_buttons = 0;
+        bool m_first_input = true;
 
         // Game Over state members
         bool m_game_over = false;

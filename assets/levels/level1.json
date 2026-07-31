@@ -54,7 +54,7 @@
          "name":"objects",
          "objects":[
                 {
-                 "gid":18,
+                 "gid":3,
                  "height":32,
                  "id":1,
                  "name":"",
@@ -122,10 +122,10 @@
                  "gid":15,
                  "height":32,
                  "id":6,
-                 "name":"",
+                 "name":"door-closed",
                  "opacity":1,
                  "rotation":0,
-                 "type":"",
+                 "type":"exit_door",
                  "visible":true,
                  "width":32,
                  "x":576,
@@ -140,7 +140,7 @@
          "y":0
         }],
  "nextlayerid":3,
- "nextobjectid":8,
+ "nextobjectid":13,
  "orientation":"orthogonal",
  "properties":[
         {
@@ -149,15 +149,11 @@
          "value":3
         }],
  "renderorder":"right-down",
- "tiledversion":"2026.07.17",
+ "tiledversion":"1.12.2",
  "tileheight":32,
  "tilesets":[
         {
          "firstgid":1,
-         "source":"..\/..\/tiled-assets\/digx-tiles.tsx"
-        }, 
-        {
-         "firstgid":16,
          "source":"..\/..\/tiled-assets\/digx-tiles.tsx"
         }],
  "tilewidth":32,

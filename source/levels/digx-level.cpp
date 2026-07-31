@@ -31,6 +31,8 @@ namespace digx
     void level::on_enter()
     {
         zwodee::tile_level::on_enter();
+        m_first_input = true;
+        m_ignored_buttons = 0;
     }
 
     void level::on_exit()
@@ -40,8 +42,19 @@ namespace digx
 
     void level::set_player_input(const zwodee::input_state& input)
     {
+        if (m_first_input)
+        {
+            m_ignored_buttons = input.buttons;
+            m_first_input = false;
+        }
+
+        m_ignored_buttons &= input.buttons;
+
+        zwodee::input_state filtered_input = input;
+        filtered_input.buttons &= ~m_ignored_buttons;
+
         m_last_input = m_current_input;
-        m_current_input = input;
+        m_current_input = filtered_input;
 
         // Toggle pause when escape key (action_2) is pressed
         if (m_current_input.is_down(zwodee::input_state::action_2) && !m_last_input.is_down(zwodee::input_state::action_2))
@@ -53,7 +66,7 @@ namespace digx
 
         if (!m_is_paused)
         {
-            zwodee::tile_level::set_player_input(input);
+            zwodee::tile_level::set_player_input(filtered_input);
         }
     }
 
