@@ -5,8 +5,18 @@
 #include <vector>
 #include <memory>
 
+#include "levels/digx-level.hpp"
+
 namespace digx
 {
+    struct savegame_data
+    {
+        char magic[4] = {'D','I','G','S'};
+        int version = 1;
+        int current_level;
+        digx::level::player_persistent_state player_state;
+    };
+
     class main_menu : public zwodee::level
     {
     public:
@@ -30,6 +40,9 @@ namespace digx
 
         // Settings option toggles
         bool m_sound_enabled = true;
+
+        bool m_has_savegame = false;
+        savegame_data m_save_data{};
 
         std::vector<button> m_main_buttons;
         std::vector<button> m_settings_buttons;

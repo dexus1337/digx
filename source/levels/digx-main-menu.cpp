@@ -1,6 +1,8 @@
 #include "levels/digx-main-menu.hpp"
 #include "levels/digx-level.hpp"
 #include <iostream>
+#include <fstream>
+#include <string_view>
 
 namespace digx
 {
@@ -20,6 +22,21 @@ namespace digx
         m_selected_index = 0;
         m_in_settings = false;
         
+        m_has_savegame = false;
+        std::ifstream save_file("savegame.dat", std::ios::binary);
+        if (save_file.good())
+        {
+            savegame_data data;
+            if (save_file.read(reinterpret_cast<char*>(&data), sizeof(data)))
+            {
+                if (std::string_view(data.magic, 4) == std::string_view("DIGS", 4) && data.version == 1)
+                {
+                    m_save_data = data;
+                    m_has_savegame = true;
+                }
+            }
+        }
+
         m_sound_enabled = !m_engine.get_audio_manager().is_muted();
         update_button_layouts();
     }
@@ -95,22 +112,42 @@ namespace digx
         {
             if (!m_in_settings)
             {
-                if (m_selected_index == 0) // Start
+                int btn_idx = m_selected_index;
+                
+                if (m_has_savegame)
                 {
-                    std::cout << "[Menu] Starting Game..." << std::endl;
-                    
-                    // Create a clean demo level instance and register it
-                    auto level = std::make_unique<digx::level>(35, 35);
-                    level->init(m_engine, "level1");
-                    m_engine.get_level_manager().register_level("demo", std::move(level));
-                    m_engine.get_level_manager().transition_to("demo");
+                    if (btn_idx == 0) // Resume
+                    {
+                        std::cout << "[Menu] Resuming Game..." << std::endl;
+                        auto level = std::make_unique<digx::level>(35, 35, m_save_data.current_level);
+                        std::string level_name = "level" + std::to_string(m_save_data.current_level);
+                        level->init(m_engine, level_name);
+                        level->set_persistent_state(m_save_data.player_state);
+                        
+                        std::string level_id = "play_level_" + std::to_string(m_save_data.current_level);
+                        m_engine.get_level_manager().register_level(level_id, std::move(level));
+                        m_engine.get_level_manager().transition_to(level_id);
+                        return;
+                    }
+                    btn_idx--; // Shift indices down so 0 is Start New Game
                 }
-                else if (m_selected_index == 1) // Settings
+
+                if (btn_idx == 0) // Start New Game
+                {
+                    std::cout << "[Menu] Starting New Game..." << std::endl;
+                    
+                    auto level = std::make_unique<digx::level>(35, 35, 1);
+                    level->init(m_engine, "level1");
+                    
+                    m_engine.get_level_manager().register_level("play_level_1", std::move(level));
+                    m_engine.get_level_manager().transition_to("play_level_1");
+                }
+                else if (btn_idx == 1) // Settings
                 {
                     m_in_settings = true;
                     m_selected_index = 0;
                 }
-                else if (m_selected_index == 2) // Exit
+                else if (btn_idx == 2) // Exit
                 {
                     std::cout << "[Menu] Exiting Game..." << std::endl;
                     m_engine.stop();
@@ -231,9 +268,22 @@ namespace digx
         float btn_x = (screen_w - btn_w) * 0.5f;
 
         m_main_buttons.clear();
-        m_main_buttons.push_back(button("Start Game", btn_x, 260.0f, btn_w, btn_h));
-        m_main_buttons.push_back(button("Settings", btn_x, 330.0f, btn_w, btn_h));
-        m_main_buttons.push_back(button("Exit", btn_x, 400.0f, btn_w, btn_h));
+        
+        float start_y = 260.0f;
+        
+        if (m_has_savegame)
+        {
+            m_main_buttons.push_back(button("Resume", btn_x, start_y, btn_w, btn_h));
+            start_y += 70.0f;
+        }
+
+        m_main_buttons.push_back(button("Start New Game", btn_x, start_y, btn_w, btn_h));
+        start_y += 70.0f;
+        
+        m_main_buttons.push_back(button("Settings", btn_x, start_y, btn_w, btn_h));
+        start_y += 70.0f;
+        
+        m_main_buttons.push_back(button("Exit", btn_x, start_y, btn_w, btn_h));
 
         m_settings_buttons.clear();
         m_settings_buttons.push_back(button(m_sound_enabled ? "Sound: ON" : "Sound: OFF", btn_x, 260.0f, btn_w, btn_h));

@@ -14,6 +14,25 @@
 
 namespace digx
 {
+    enum class entity_type : uint32_t
+    {
+        player = 2,
+        mummy = 3,
+        soldier = 4,
+        vampire = 5,
+        dragon = 6,
+        stone_mid = 7,
+        stone_low = 8,
+        stone_high = 9,
+        diamond = 10,
+        gold_coin = 11,
+        lamp = 12,
+        garlic = 13,
+        onion = 14,
+        pickaxe = 15,
+        exit_door = 16
+    };
+
     class player;
 
     class level : public zwodee::tile_level
@@ -110,6 +129,7 @@ namespace digx
 
         void set_persistent_state(const player_persistent_state& state);
         void advance_to_next_level();
+        void save_game(int target_level = -1);
 
     private:
         player_persistent_state m_persisted_state;

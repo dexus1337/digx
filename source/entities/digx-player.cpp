@@ -324,7 +324,7 @@ namespace digx
                             if (target_undigged)
                             {
                                 m_is_digging = true;
-                                m_digging_ticks_remaining = m_has_pickaxe ? 48 : 96;
+                                m_digging_ticks_remaining = m_has_pickaxe ? pickaxe_digging_ticks : shovel_digging_ticks;
                             }
                             else
                             {
@@ -367,7 +367,7 @@ namespace digx
                             if (target_undigged)
                             {
                                 m_is_digging = true;
-                                m_digging_ticks_remaining = m_has_pickaxe ? 48 : 96;
+                                m_digging_ticks_remaining = m_has_pickaxe ? pickaxe_digging_ticks : shovel_digging_ticks;
                             }
                             else
                             {
@@ -450,7 +450,7 @@ namespace digx
                     if (target_undigged)
                     {
                         m_is_digging = true;
-                        m_digging_ticks_remaining = m_has_pickaxe ? 48 : 96;
+                        m_digging_ticks_remaining = m_has_pickaxe ? pickaxe_digging_ticks : shovel_digging_ticks;
                     }
                     else
                     {

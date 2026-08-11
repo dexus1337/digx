@@ -15,6 +15,9 @@ namespace digx
     class player : public zwodee::entity_player
     {
     public:
+        static constexpr int shovel_digging_ticks  = 90;
+        static constexpr int pickaxe_digging_ticks = 40;
+
         player(uint32_t network_id, zwodee::audio_manager* audio);
 
         void tick() override;

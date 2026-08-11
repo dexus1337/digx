@@ -12,6 +12,7 @@
 #include "items/digx-onion-bulb.hpp"
 #include "items/digx-pickaxe.hpp"
 #include "items/digx-exit-door.hpp"
+#include "levels/digx-main-menu.hpp"
 
 #include <SDL3/SDL.h>
 #include <cmath>
@@ -24,7 +25,7 @@ namespace digx
     level::level(uint32_t width, uint32_t height, int level_number)
         : zwodee::tile_level(width, height), m_level_number(level_number)
     {
-        m_target_darkness = std::max(0.2f, 1.0f - (level_number - 1) * 0.15f);
+        m_target_darkness = 1.0f;
         m_current_darkness = 1.0f; // Smoothly fades to target darkness on entry
     }
 
@@ -73,6 +74,52 @@ namespace digx
     void level::tick()
     {
         if (!m_player) return;
+
+        // Process Developer Console Commands
+        if (m_engine)
+        {
+            std::string cmd;
+            while (m_engine->pop_console_command(cmd))
+            {
+                if (cmd.rfind("level ", 0) == 0) // starts_with
+                {
+                    std::string level_name = cmd.substr(6);
+                    std::string path = "assets/levels/" + level_name + ".zwl";
+                    
+                    std::ifstream f(path);
+                    if (f.good())
+                    {
+                        f.close();
+                        int level_num = 1; // Default
+                        if (level_name.rfind("level", 0) == 0)
+                        {
+                            try { level_num = std::stoi(level_name.substr(5)); } catch(...) {}
+                        }
+
+                        auto new_level = std::make_unique<digx::level>(get_width(), get_height(), level_num);
+                        new_level->init(*m_engine, level_name);
+                        m_engine->get_level_manager().register_level(level_name, std::move(new_level));
+                        m_engine->get_level_manager().transition_to(level_name);
+                        return; // Exit tick to avoid accessing destroyed level
+                    }
+                }
+                else if (cmd.rfind("tp ", 0) == 0)
+                {
+                    try
+                    {
+                        size_t space1 = cmd.find(' ');
+                        size_t space2 = cmd.find(' ', space1 + 1);
+                        if (space2 != std::string::npos)
+                        {
+                            int gx = std::stoi(cmd.substr(space1 + 1, space2 - space1 - 1));
+                            int gy = std::stoi(cmd.substr(space2 + 1));
+                            m_player->set_grid_position(gx, gy);
+                        }
+                    }
+                    catch(...) {}
+                }
+            }
+        }
 
         if (m_fart_effect_ticks > 0)
         {
@@ -325,11 +372,13 @@ namespace digx
                     }
                     else if (m_pause_selected_index == 2) // Back to Main Menu
                     {
+                        save_game();
                         m_is_paused = false;
                         m_engine->get_level_manager().transition_to("main_menu");
                     }
                     else if (m_pause_selected_index == 3) // Exit
                     {
+                        save_game();
                         m_engine->stop();
                     }
                 }
@@ -905,6 +954,36 @@ namespace digx
             {
                 audio->play_sound("level_done");
             }
+        }
+    }
+
+    void level::save_game(int target_level)
+    {
+        int level_to_save = (target_level == -1) ? m_level_number : target_level;
+
+        savegame_data save_data;
+        save_data.current_level = level_to_save;
+        
+        player_persistent_state state;
+        if (m_player)
+        {
+            state.score = m_player->get_score();
+            state.diamonds = m_player->get_diamond_count();
+            state.garlic = m_player->get_garlic_count();
+            state.onion = m_player->get_onion_count();
+            state.has_pickaxe = m_player->has_pickaxe();
+        }
+        else
+        {
+            state = m_persisted_state;
+        }
+        save_data.player_state = state;
+
+        std::ofstream save_file("savegame.dat", std::ios::binary);
+        if (save_file.good())
+        {
+            save_file.write(reinterpret_cast<const char*>(&save_data), sizeof(savegame_data));
+            save_file.close();
         }
     }
 
@@ -1695,6 +1774,28 @@ namespace digx
                 }
             }
         }
+
+        // Render Developer Console
+        if (m_engine && m_engine->is_console_active() && m_font)
+        {
+            float screen_w = static_cast<float>(display_w);
+            float bar_h = 40.0f;
+
+            // Background bar
+            zwodee::render_node bg_node;
+            bg_node.tex = nullptr;
+            bg_node.x = 0; bg_node.y = 0; bg_node.w = screen_w; bg_node.h = bar_h;
+            bg_node.is_ui = true;
+            bg_node.is_blur = false;
+            bg_node.r = 20; bg_node.g = 20; bg_node.b = 20; bg_node.a = 230;
+            snapshot.push_back(bg_node);
+
+            // Text
+            std::string console_text = "> " + m_engine->get_console_buffer() + "_";
+            auto text_nodes = m_font->get_text_nodes(console_text, 10.0f, 28.0f, 0.3f, 0, 255, 0, 255); // Green text
+            for (auto& node : text_nodes) node.is_ui = true;
+            snapshot.insert(snapshot.end(), text_nodes.begin(), text_nodes.end());
+        }
  
         return snapshot;
     }
@@ -1774,7 +1875,7 @@ namespace digx
             int gx = static_cast<int>(std::round(be.x / 32.0f));
             int gy = static_cast<int>(std::round(be.y / 32.0f));
             
-            if (be.type_id == 1) // Player
+            if (be.type_id == static_cast<uint32_t>(entity_type::player)) // Player
             {
                 auto goblin = std::make_unique<player>(1, m_engine ? &m_engine->get_audio_manager() : nullptr);
                 goblin->set_grid_bounds(get_width(), get_height());
@@ -1795,80 +1896,82 @@ namespace digx
 
                 add_entity(std::move(goblin));
             }
-            else if (be.type_id == 10) // Mummy
+            else if (be.type_id == static_cast<uint32_t>(entity_type::mummy)) // Mummy
             {
                 auto m = std::make_unique<mummy>(m_next_dynamic_mummy_id++);
                 m->set_grid_position(gx, gy);
                 m->trigger_spawn(); 
                 add_entity(std::move(m));
             }
-            else if (be.type_id == 11) // Soldier
+            else if (be.type_id == static_cast<uint32_t>(entity_type::soldier)) // Soldier
             {
                 auto s = std::make_unique<soldier>(m_next_dynamic_mummy_id++);
                 s->set_grid_position(gx, gy);
                 add_entity(std::move(s));
             }
-            else if (be.type_id == 12) // Vampire
+            else if (be.type_id == static_cast<uint32_t>(entity_type::vampire)) // Vampire
             {
                 auto v = std::make_unique<vampire>(m_next_dynamic_mummy_id++);
                 v->set_grid_position(gx, gy);
                 add_entity(std::move(v));
             }
-            else if (be.type_id == 13) // Dragon
+            else if (be.type_id == static_cast<uint32_t>(entity_type::dragon)) // Dragon
             {
                 auto d = std::make_unique<dragon>(m_next_dynamic_mummy_id++);
                 d->set_grid_position(gx, gy);
                 add_entity(std::move(d));
             }
-            else if (be.type_id == 20) // Stone
+            else if (be.type_id == static_cast<uint32_t>(entity_type::stone_mid) ||
+                     be.type_id == static_cast<uint32_t>(entity_type::stone_low) ||
+                     be.type_id == static_cast<uint32_t>(entity_type::stone_high)) // Stone
             {
                 stone::stone_color col = stone::color_mid;
-                if (be.health == 100) col = stone::color_high;
-                else if (be.health == 50) col = stone::color_mid;
+                if (be.type_id == static_cast<uint32_t>(entity_type::stone_high)) col = stone::color_high;
+                else if (be.type_id == static_cast<uint32_t>(entity_type::stone_mid)) col = stone::color_mid;
                 else col = stone::color_low;
                 
                 auto s = std::make_unique<stone>(next_stone_id++, col);
                 s->set_grid_position(gx, gy);
                 add_entity(std::move(s));
             }
-            else if (be.type_id == 21) // Diamond
+            else if (be.type_id == static_cast<uint32_t>(entity_type::diamond)) // Diamond
             {
                 auto d = std::make_unique<diamond>(next_stone_id++);
                 d->set_grid_position(gx, gy);
                 add_entity(std::move(d));
             }
-            else if (be.type_id == 22) // Gold Coin
+            else if (be.type_id == static_cast<uint32_t>(entity_type::gold_coin)) // Gold Coin
             {
                 auto c = std::make_unique<gold_coin>(next_stone_id++);
                 c->set_grid_position(gx, gy);
                 add_entity(std::move(c));
                 m_target_gold++;
             }
-            else if (be.type_id == 23) // Lamp
+            else if (be.type_id == static_cast<uint32_t>(entity_type::lamp)) // Lamp
             {
                 auto l = std::make_unique<lamp>(next_stone_id++);
                 l->set_grid_position(gx, gy);
                 add_entity(std::move(l));
             }
-            else if (be.type_id == 24) // Garlic
+            else if (be.type_id == static_cast<uint32_t>(entity_type::garlic)) // Garlic
             {
                 auto g = std::make_unique<garlic_bulb>(next_stone_id++);
                 g->set_grid_position(gx, gy);
                 add_entity(std::move(g));
             }
-            else if (be.type_id == 25) // Onion
+            else if (be.type_id == static_cast<uint32_t>(entity_type::onion)) // Onion
             {
                 auto o = std::make_unique<onion_bulb>(next_stone_id++);
                 o->set_grid_position(gx, gy);
                 add_entity(std::move(o));
             }
-            else if (be.type_id == 26) // Pickaxe
+            else if (be.type_id == static_cast<uint32_t>(entity_type::pickaxe)) // Pickaxe
             {
                 auto p = std::make_unique<pickaxe>(next_stone_id++);
                 p->set_grid_position(gx, gy);
                 add_entity(std::move(p));
             }
-            else if (be.type_id == 27) // Exit door
+            else if (be.type_id == static_cast<uint32_t>(entity_type::exit_door)) // Exit door
             {
                 auto door = std::make_unique<exit_door>(15);
                 door->set_grid_position(gx, gy);
@@ -1926,6 +2029,9 @@ namespace digx
             }
             new_level->set_persistent_state(state);
             
+            // Save game
+            save_game(next_level);
+
             std::string level_id = "play_level_" + std::to_string(next_level);
             m_engine->get_level_manager().register_level(level_id, std::move(new_level));
             m_engine->get_level_manager().transition_to(level_id);
