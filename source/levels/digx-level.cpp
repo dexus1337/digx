@@ -542,15 +542,24 @@ namespace digx
         px = m_player->get_x();
         py = m_player->get_y();
 
-        // Check if player reaches the exit door when it's open
+        // Check if player reaches ANY open exit door
         if (m_exit_open)
         {
-            float dx = px - m_exit_x;
-            float dy = py - m_exit_y;
-            if (std::sqrt(dx * dx + dy * dy) < 24.0f)
+            for (const auto& ent : get_entities())
             {
-                advance_to_next_level();
-                return;
+                if (auto* door = dynamic_cast<exit_door*>(ent.get()))
+                {
+                    if (door->is_open())
+                    {
+                        float dx = px - door->get_x();
+                        float dy = py - door->get_y();
+                        if (std::sqrt(dx * dx + dy * dy) < 24.0f)
+                        {
+                            advance_to_next_level();
+                            return;
+                        }
+                    }
+                }
             }
         }
 
@@ -1152,6 +1161,19 @@ namespace digx
             {
                 get_static_objects()[idx]->set_collidable(false);
             }
+
+            // Reveal any diamond at this location
+            for (const auto& ent : get_entities())
+            {
+                if (auto* dm = dynamic_cast<diamond*>(ent.get()))
+                {
+                    if (std::abs(dm->get_x() - gx * 32.0f) < 8.0f &&
+                        std::abs(dm->get_y() - gy * 32.0f) < 8.0f)
+                    {
+                        dm->set_permanently_revealed(true);
+                    }
+                }
+            }
         }
     }
 
@@ -1185,7 +1207,7 @@ namespace digx
         else if (radius == 2) // Black 3x3
         {
             min_x = sgx - 1; max_x = sgx + 1;
-            min_y = sgy - 1; max_y = sgy + 1;
+            min_y = sgy;     max_y = sgy + 2;
         }
 
         st->take_damage(999); // Destroy the stone itself
@@ -1533,7 +1555,8 @@ namespace digx
             tx += g_w;
 
             // Coin
-            left_items.push_back({texture_cache::get().coin_tex.get(), tx, icon_sz, ": " + std::to_string(m_player->get_gold_count())});
+            int coins_left = std::max(0, m_target_gold - m_player->get_gold_count());
+            left_items.push_back({texture_cache::get().coin_tex.get(), tx, icon_sz, ": " + std::to_string(coins_left)});
             tx += icon_sz + 4.0f;
             float c_w = 0.0f;
             for (char c : left_items.back().text) c_w += m_font->get_glyph(c).xadvance * font_scale;
@@ -1819,6 +1842,11 @@ namespace digx
             return;
         }
 
+        if (header.width == 0 || header.height == 0)
+        {
+            return;
+        }
+
         resize(header.width, header.height);
         
         // Read tiles
@@ -2025,7 +2053,7 @@ namespace digx
                 state.diamonds = m_player->get_diamond_count();
                 state.garlic = m_player->get_garlic_count();
                 state.onion = m_player->get_onion_count();
-                state.has_pickaxe = m_player->has_pickaxe();
+                state.has_pickaxe = false; // Pickaxe does not carry over to the next level
             }
             new_level->set_persistent_state(state);
             
