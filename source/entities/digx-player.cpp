@@ -60,17 +60,13 @@ namespace digx
         {
             m_fart_cooldown--;
         }
-        if (m_breath_cooldown > 0)
-        {
-            m_breath_cooldown--;
-        }
 
-        if (m_current_input.is_down(zwodee::input_state::action_1))
+        if (m_current_input.is_down(zwodee::input_state::action_1) && !m_prev_input.is_down(zwodee::input_state::action_1))
         {
             if (m_onion_count > 0 && m_fart_cooldown == 0)
             {
                 m_onion_count--;
-                m_fart_cooldown = 128 * 3;
+                m_fart_cooldown = 32;
 
                 // Play a random fart sound from fart-1 to fart-5 and chew sound
                 if (m_audio)
@@ -91,20 +87,6 @@ namespace digx
             }
         }
 
-        if (m_current_input.is_down(zwodee::input_state::action_2))
-        {
-            if (m_garlic_count > 0 && m_breath_cooldown == 0)
-            {
-                m_garlic_count--;
-                m_breath_cooldown = 128 * 5;
-
-                // Play garlic chew sound
-                if (m_audio)
-                {
-                    m_audio->play_sound("garlic_chew");
-                }
-            }
-        }
 
         // Track new keypresses and add them to horizontal/vertical history
         uint32_t pressed = m_current_input.buttons & ~m_prev_input.buttons;
@@ -186,7 +168,6 @@ namespace digx
         {
             bool cancel_tap = false;
             if (pressed & zwodee::input_state::action_1) cancel_tap = true;
-            if (pressed & zwodee::input_state::action_2) cancel_tap = true;
 
             // Increment queued steps if pressing in same direction
             if (pressed & zwodee::input_state::move_left)
@@ -654,11 +635,6 @@ namespace digx
     float player::get_fart_active_time() const
     {
         return static_cast<float>(m_fart_cooldown) / 128.0f;
-    }
-
-    float player::get_breath_active_time() const
-    {
-        return static_cast<float>(m_breath_cooldown) / 128.0f;
     }
 
     void player::respawn(float x, float y)

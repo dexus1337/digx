@@ -1358,6 +1358,10 @@ namespace digx
         m_fart_y = 0.0f;
         m_active_explosions.clear();
 
+        m_persisted_state.garlic = 0;
+        m_persisted_state.onion = 0;
+        m_persisted_state.has_pickaxe = false;
+
         clear_level();
         init(*m_engine, m_level_name);
     }

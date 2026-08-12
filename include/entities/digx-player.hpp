@@ -53,7 +53,6 @@ namespace digx
         int get_score() const;
 
         float get_fart_active_time() const;
-        float get_breath_active_time() const;
 
         void set_grid_bounds(int cols, int rows);
         void set_level(zwodee::tile_level* lvl);
@@ -81,7 +80,6 @@ namespace digx
         int m_digging_ticks_remaining = 0;
 
         int m_fart_cooldown = 0;
-        int m_breath_cooldown = 0;
 
         // Grid movement control
         float m_target_x = 0.0f;

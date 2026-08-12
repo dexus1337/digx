@@ -70,14 +70,6 @@ namespace digx
             set_texture(tc.vampire_sleeping_tex.get());
         }
 
-        if (m_is_active && player->get_breath_active_time() > 0.0f)
-        {
-            m_neutralized_ticks = 640; // Stunned for 5 seconds (640 ticks at 128Hz)
-            m_is_active = false;
-            set_texture(texture_cache::get().vampire_sleeping_tex.get());
-            return;
-        }
-
         if (m_is_active && dist < 16.0f)
         {
             if (player->get_garlic_count() > 0)
@@ -86,6 +78,10 @@ namespace digx
                 m_neutralized_ticks = 640; // Stunned for 5 seconds
                 m_is_active = false;
                 set_texture(texture_cache::get().vampire_sleeping_tex.get());
+                if (auto* audio = player->get_audio_manager())
+                {
+                    audio->play_sound("garlic_chew");
+                }
             }
             else
             {
