@@ -69,6 +69,7 @@ namespace digx
         std::shared_ptr<zwodee::texture> vampire_triggered_tex;
         std::shared_ptr<zwodee::texture> player_dead_tex;
         std::shared_ptr<zwodee::texture> fart_tex;
+        std::shared_ptr<zwodee::texture> explosion_tex;
         std::shared_ptr<zwodee::texture> soldier_tex;
         std::shared_ptr<zwodee::texture> soldier_front_tex;
         std::shared_ptr<zwodee::texture> soldier_back_tex;

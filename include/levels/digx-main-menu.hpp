@@ -1,7 +1,6 @@
 #pragma once
 
 #include "zwodee.hpp"
-#include "levels/digx-button.hpp"
 #include <vector>
 #include <memory>
 
@@ -44,8 +43,10 @@ namespace digx
         bool m_has_savegame = false;
         savegame_data m_save_data{};
 
-        std::vector<button> m_main_buttons;
-        std::vector<button> m_settings_buttons;
+        std::vector<zwodee::button> m_main_buttons;
+        std::vector<zwodee::button> m_settings_buttons;
+        zwodee::toggle_switch m_sound_switch;
+        zwodee::slider m_volume_slider;
 
         zwodee::input_state m_last_input{};
         zwodee::input_state m_current_input{};

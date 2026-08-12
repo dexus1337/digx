@@ -246,14 +246,15 @@ namespace digx
 
                 if (m_has_pickaxe)
                 {
-                    if (m_digging_ticks_remaining == 47)
+                    if (m_digging_ticks_remaining == pickaxe_digging_ticks / 2 - 5)
                     {
                         play_dig_sound(m_audio, true);
                     }
                 }
                 else
                 {
-                    if (m_digging_ticks_remaining == 95 || m_digging_ticks_remaining == 47)
+                    if (m_digging_ticks_remaining == shovel_digging_ticks - 5 || 
+                        m_digging_ticks_remaining == shovel_digging_ticks / 2 - 5)
                     {
                         play_dig_sound(m_audio, false);
                     }

@@ -1,13 +1,17 @@
 #include "levels/digx-main-menu.hpp"
 #include "levels/digx-level.hpp"
+#include "config-manager.hpp"
 #include <iostream>
 #include <fstream>
 #include <string_view>
+#include <SDL3/SDL.h>
 
 namespace digx
 {
     main_menu::main_menu(zwodee::engine& engine)
-        : m_engine(engine)
+        : m_engine(engine),
+          m_sound_switch("Sound Effects", true, 0.0f, 0.0f, 300.0f, 40.0f),
+          m_volume_slider("Audio Volume", engine.get_audio_manager().get_volume(), 0.0f, 1.0f, 0.0f, 0.0f, 300.0f, 40.0f)
     {
         // Load the TTF font from our assets folder at 72px for high resolution
         m_font = std::make_unique<zwodee::font>(m_engine.get_renderer(), "assets/fonts/Roboto-Medium.ttf", 72.0f);
@@ -38,6 +42,7 @@ namespace digx
         }
 
         m_sound_enabled = !m_engine.get_audio_manager().is_muted();
+        m_volume_slider.set_value(m_engine.get_audio_manager().get_volume());
         update_button_layouts();
     }
 
@@ -72,45 +77,42 @@ namespace digx
         bool left_clicked = is_left_down && !was_left_down;
         was_left_down = is_left_down;
 
-        const auto& active_buttons = m_in_settings ? m_settings_buttons : m_main_buttons;
-
-        // Hover detection
         static float prev_mx = -1.0f;
         static float prev_my = -1.0f;
         bool mouse_moved = (mx != prev_mx || my != prev_my);
         prev_mx = mx;
         prev_my = my;
 
-        bool hovered_any = false;
-        for (size_t i = 0; i < active_buttons.size(); ++i)
+        if (!m_in_settings)
         {
-            if (active_buttons[i].is_hovered(mx, my))
+            bool hovered_any = false;
+            for (size_t i = 0; i < m_main_buttons.size(); ++i)
             {
-                if (mouse_moved)
+                if (m_main_buttons[i].is_hovered(mx, my))
                 {
-                    m_selected_index = static_cast<int>(i);
+                    if (mouse_moved)
+                    {
+                        m_selected_index = static_cast<int>(i);
+                    }
+                    hovered_any = true;
+                    break;
                 }
-                hovered_any = true;
-                break;
             }
-        }
 
-        // Keyboard navigation
-        if (is_key_pressed(zwodee::input_state::move_up))
-        {
-            m_selected_index = (m_selected_index - 1 + static_cast<int>(active_buttons.size())) % static_cast<int>(active_buttons.size());
-        }
-        else if (is_key_pressed(zwodee::input_state::move_down))
-        {
-            m_selected_index = (m_selected_index + 1) % static_cast<int>(active_buttons.size());
-        }
+            // Keyboard navigation
+            if (is_key_pressed(zwodee::input_state::move_up))
+            {
+                m_selected_index = (m_selected_index - 1 + static_cast<int>(m_main_buttons.size())) % static_cast<int>(m_main_buttons.size());
+            }
+            else if (is_key_pressed(zwodee::input_state::move_down))
+            {
+                m_selected_index = (m_selected_index + 1) % static_cast<int>(m_main_buttons.size());
+            }
 
-        // Selection Action (Enter/Space or left click on hovered button)
-        bool trigger_action = is_key_pressed(zwodee::input_state::action_1) || (left_clicked && hovered_any);
+            // Selection Action
+            bool trigger_action = is_key_pressed(zwodee::input_state::action_1) || (left_clicked && hovered_any);
 
-        if (trigger_action)
-        {
-            if (!m_in_settings)
+            if (trigger_action)
             {
                 int btn_idx = m_selected_index;
                 
@@ -129,7 +131,7 @@ namespace digx
                         m_engine.get_level_manager().transition_to(level_id);
                         return;
                     }
-                    btn_idx--; // Shift indices down so 0 is Start New Game
+                    btn_idx--;
                 }
 
                 if (btn_idx == 0) // Start New Game
@@ -146,6 +148,7 @@ namespace digx
                 {
                     m_in_settings = true;
                     m_selected_index = 0;
+                    m_volume_slider.reset_drag();
                 }
                 else if (btn_idx == 2) // Exit
                 {
@@ -153,14 +156,84 @@ namespace digx
                     m_engine.stop();
                 }
             }
-            else
+        }
+        else
+        {
+            // Settings menu layout: Index 0 = Sound Switch, Index 1 = Volume Slider, Index 2 = FPS Cap, Index 3 = Back
+            int total_settings_items = 4;
+
+            if (m_sound_enabled)
             {
-                if (m_selected_index == 0) // Sound toggle
+                if (m_volume_slider.handle_mouse(mx, my, is_left_down, left_clicked))
+                {
+                    m_engine.get_audio_manager().set_volume(m_volume_slider.get_value());
+                    config_manager::save_config(m_engine);
+                }
+            }
+
+            bool hovered_any = false;
+            if (m_sound_switch.is_hovered(mx, my))
+            {
+                if (mouse_moved) m_selected_index = 0;
+                hovered_any = true;
+            }
+            else if (m_volume_slider.is_hovered(mx, my))
+            {
+                if (mouse_moved) m_selected_index = 1;
+                hovered_any = true;
+            }
+            else if (m_settings_buttons[0].is_hovered(mx, my))
+            {
+                if (mouse_moved) m_selected_index = 2;
+                hovered_any = true;
+            }
+            else if (m_settings_buttons[1].is_hovered(mx, my))
+            {
+                if (mouse_moved) m_selected_index = 3;
+                hovered_any = true;
+            }
+
+            // Keyboard navigation
+            if (is_key_pressed(zwodee::input_state::move_up))
+            {
+                m_selected_index = (m_selected_index - 1 + total_settings_items) % total_settings_items;
+            }
+            else if (is_key_pressed(zwodee::input_state::move_down))
+            {
+                m_selected_index = (m_selected_index + 1) % total_settings_items;
+            }
+
+            // Slider Left / Right adjustment
+            if (m_selected_index == 1 && m_sound_enabled)
+            {
+                if (is_key_pressed(zwodee::input_state::move_left))
+                {
+                    m_volume_slider.adjust_value(-0.05f);
+                    m_engine.get_audio_manager().set_volume(m_volume_slider.get_value());
+                    config_manager::save_config(m_engine);
+                }
+                else if (is_key_pressed(zwodee::input_state::move_right))
+                {
+                    m_volume_slider.adjust_value(+0.05f);
+                    m_engine.get_audio_manager().set_volume(m_volume_slider.get_value());
+                    config_manager::save_config(m_engine);
+                }
+            }
+
+            // Selection action
+            bool trigger_action = is_key_pressed(zwodee::input_state::action_1) || (left_clicked && hovered_any);
+
+            if (trigger_action)
+            {
+                if (m_selected_index == 0) // Sound toggle switch
                 {
                     m_sound_enabled = !m_sound_enabled;
+                    m_sound_switch.set_on(m_sound_enabled);
                     m_engine.get_audio_manager().set_muted(!m_sound_enabled);
+                    update_button_layouts();
+                    config_manager::save_config(m_engine);
                 }
-                else if (m_selected_index == 1) // FPS Cap toggle
+                else if (m_selected_index == 2) // FPS Cap toggle
                 {
                     zwodee::engine::fps_limit next_limit = zwodee::engine::fps_limit::vsync;
                     switch (m_engine.get_fps_limit())
@@ -174,13 +247,15 @@ namespace digx
                         case zwodee::engine::fps_limit::unlocked: next_limit = zwodee::engine::fps_limit::vsync; break;
                     }
                     m_engine.set_fps_limit(next_limit);
+                    update_button_layouts();
+                    config_manager::save_config(m_engine);
                 }
-                else if (m_selected_index == 2) // Back
+                else if (m_selected_index == 3) // Back
                 {
                     m_in_settings = false;
                     m_selected_index = 1; // Highlight settings option
+                    update_button_layouts();
                 }
-                update_button_layouts();
             }
         }
     }
@@ -194,8 +269,6 @@ namespace digx
     zwodee::render_snapshot main_menu::get_render_snapshot(int display_w, int display_h) const
     {
         float screen_w = static_cast<float>(display_w);
-        float screen_h = static_cast<float>(display_h);
-
         zwodee::render_snapshot snapshot;
 
         // Render Title Text "DIG X" centered
@@ -210,7 +283,7 @@ namespace digx
                 title_w += m_font->get_glyph(c).xadvance * title_scale;
             }
             float tx = (screen_w - title_w) * 0.5f;
-            std::vector<zwodee::render_node> title_nodes = m_font->get_text_nodes(title, tx, 80.0f, title_scale, 255, 215, 0, 255); // Premium Gold title
+            std::vector<zwodee::render_node> title_nodes = m_font->get_text_nodes(title, tx, 80.0f, title_scale, 255, 215, 0, 255);
             for (auto& node : title_nodes)
             {
                 node.is_ui = true;
@@ -233,15 +306,42 @@ namespace digx
             }
             snapshot.insert(snapshot.end(), sub_nodes.begin(), sub_nodes.end());
 
-            // Render Buttons
-            const auto& active_buttons = m_in_settings ? m_settings_buttons : m_main_buttons;
-            for (size_t i = 0; i < active_buttons.size(); ++i)
+            // Render Buttons / UI
+            if (!m_in_settings)
             {
-                active_buttons[i].add_to_snapshot(snapshot, *m_font, m_selected_index == static_cast<int>(i));
+                for (size_t i = 0; i < m_main_buttons.size(); ++i)
+                {
+                    m_main_buttons[i].add_to_snapshot(snapshot, *m_font, m_selected_index == static_cast<int>(i));
+                }
+            }
+            else
+            {
+                // Sound Switch (Index 0)
+                m_sound_switch.add_to_snapshot(snapshot, *m_font, m_selected_index == 0);
+
+                // Volume Slider (Index 1)
+                m_volume_slider.add_to_snapshot(snapshot, *m_font, m_selected_index == 1);
+
+                // FPS Cap Label & Button (Index 2)
+                std::string fps_title = "FPS Cap";
+                float label_scale = 0.35f;
+                float fps_w = 0.0f;
+                for (char c : fps_title) fps_w += m_font->get_glyph(c).xadvance * label_scale;
+                float fx = (screen_w - fps_w) * 0.5f;
+                float fy = m_settings_buttons[0].get_y() - 6.0f;
+
+                std::vector<zwodee::render_node> fps_nodes = m_font->get_text_nodes(fps_title, fx, fy, label_scale, 200, 200, 200, 255);
+                for (auto& node : fps_nodes) node.is_ui = true;
+                snapshot.insert(snapshot.end(), fps_nodes.begin(), fps_nodes.end());
+
+                m_settings_buttons[0].add_to_snapshot(snapshot, *m_font, m_selected_index == 2);
+
+                // Back Button (Index 3)
+                m_settings_buttons[1].add_to_snapshot(snapshot, *m_font, m_selected_index == 3);
             }
 
             // Draw help text
-            std::string help = "Use Arrow Keys/W-S & Enter or Mouse to select";
+            std::string help = m_in_settings ? "Use Arrow Keys (Left/Right to adjust volume) & Enter or Mouse" : "Use Arrow Keys/W-S & Enter or Mouse to select";
             float help_scale = 0.28f;
             float help_w = 0.0f;
             for (char c : help)
@@ -273,33 +373,43 @@ namespace digx
         
         if (m_has_savegame)
         {
-            m_main_buttons.push_back(button("Resume", btn_x, start_y, btn_w, btn_h));
+            m_main_buttons.push_back(zwodee::button("Resume", btn_x, start_y, btn_w, btn_h));
             start_y += 70.0f;
         }
 
-        m_main_buttons.push_back(button("Start New Game", btn_x, start_y, btn_w, btn_h));
+        m_main_buttons.push_back(zwodee::button("Start New Game", btn_x, start_y, btn_w, btn_h));
         start_y += 70.0f;
         
-        m_main_buttons.push_back(button("Settings", btn_x, start_y, btn_w, btn_h));
+        m_main_buttons.push_back(zwodee::button("Settings", btn_x, start_y, btn_w, btn_h));
         start_y += 70.0f;
         
-        m_main_buttons.push_back(button("Exit", btn_x, start_y, btn_w, btn_h));
+        m_main_buttons.push_back(zwodee::button("Exit", btn_x, start_y, btn_w, btn_h));
+
+        m_sound_enabled = !m_engine.get_audio_manager().is_muted();
+
+        m_sound_switch.set_position(btn_x, 240.0f);
+        m_sound_switch.set_size(btn_w, 40.0f);
+        m_sound_switch.set_on(m_sound_enabled);
+
+        m_volume_slider.set_position(btn_x, 315.0f);
+        m_volume_slider.set_size(btn_w, 40.0f);
+        m_volume_slider.set_value(m_engine.get_audio_manager().get_volume());
+        m_volume_slider.set_enabled(m_sound_enabled);
 
         m_settings_buttons.clear();
-        m_settings_buttons.push_back(button(m_sound_enabled ? "Sound: ON" : "Sound: OFF", btn_x, 260.0f, btn_w, btn_h));
 
-        std::string fps_label = "FPS Cap: Unknown";
+        std::string fps_val = "VSync";
         switch (m_engine.get_fps_limit())
         {
-            case zwodee::engine::fps_limit::vsync:    fps_label = "FPS Cap: VSync"; break;
-            case zwodee::engine::fps_limit::fps_60:   fps_label = "FPS Cap: 60 FPS"; break;
-            case zwodee::engine::fps_limit::fps_144:  fps_label = "FPS Cap: 144 FPS"; break;
-            case zwodee::engine::fps_limit::fps_240:  fps_label = "FPS Cap: 240 FPS"; break;
-            case zwodee::engine::fps_limit::fps_360:  fps_label = "FPS Cap: 360 FPS"; break;
-            case zwodee::engine::fps_limit::fps_480:  fps_label = "FPS Cap: 480 FPS"; break;
-            case zwodee::engine::fps_limit::unlocked: fps_label = "FPS Cap: Unlocked"; break;
+            case zwodee::engine::fps_limit::vsync:    fps_val = "VSync"; break;
+            case zwodee::engine::fps_limit::fps_60:   fps_val = "60 FPS"; break;
+            case zwodee::engine::fps_limit::fps_144:  fps_val = "144 FPS"; break;
+            case zwodee::engine::fps_limit::fps_240:  fps_val = "240 FPS"; break;
+            case zwodee::engine::fps_limit::fps_360:  fps_val = "360 FPS"; break;
+            case zwodee::engine::fps_limit::fps_480:  fps_val = "480 FPS"; break;
+            case zwodee::engine::fps_limit::unlocked: fps_val = "Unlocked"; break;
         }
-        m_settings_buttons.push_back(button(fps_label, btn_x, 330.0f, btn_w, btn_h));
-        m_settings_buttons.push_back(button("Back", btn_x, 400.0f, btn_w, btn_h));
+        m_settings_buttons.push_back(zwodee::button(fps_val, btn_x, 390.0f, btn_w, 40.0f));
+        m_settings_buttons.push_back(zwodee::button("Back", btn_x, 465.0f, btn_w, 40.0f));
     }
 }

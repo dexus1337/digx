@@ -42,7 +42,7 @@ find_library(zwodee_lib zwodee
 )
 
 # Grab all source files recursively
-file(GLOB_RECURSE source_files "source/*.cpp")
+file(GLOB_RECURSE source_files CONFIGURE_DEPENDS "source/*.cpp")
 set(app_resources "assets/resources.rc")
 
 # Executable target

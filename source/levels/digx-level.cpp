@@ -13,6 +13,7 @@
 #include "items/digx-pickaxe.hpp"
 #include "items/digx-exit-door.hpp"
 #include "levels/digx-main-menu.hpp"
+#include "config-manager.hpp"
 
 #include <SDL3/SDL.h>
 #include <cmath>
@@ -23,7 +24,9 @@
 namespace digx
 {
     level::level(uint32_t width, uint32_t height, int level_number)
-        : zwodee::tile_level(width, height), m_level_number(level_number)
+        : zwodee::tile_level(width, height), m_level_number(level_number),
+          m_sound_switch("Sound Effects", true, 0.0f, 0.0f, 300.0f, 40.0f),
+          m_volume_slider("Audio Volume", 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 300.0f, 40.0f)
     {
         m_target_darkness = 1.0f;
         m_current_darkness = 1.0f; // Smoothly fades to target darkness on entry
@@ -65,9 +68,13 @@ namespace digx
             m_pause_selected_index = 0;
         }
 
-        if (!m_is_paused)
+        if (!m_is_paused && m_level_finish_sequence_ticks < 0 && m_level_entry_fade_ticks <= 0)
         {
             zwodee::tile_level::set_player_input(filtered_input);
+        }
+        else
+        {
+            zwodee::tile_level::set_player_input(zwodee::input_state{});
         }
     }
 
@@ -134,9 +141,9 @@ namespace digx
             float btn_x = (screen_w - btn_w) * 0.5f;
 
             m_game_over_buttons.clear();
-            m_game_over_buttons.push_back(button("Restart", btn_x, 260.0f, btn_w, btn_h));
-            m_game_over_buttons.push_back(button("Main Menu", btn_x, 330.0f, btn_w, btn_h));
-            m_game_over_buttons.push_back(button("Exit", btn_x, 400.0f, btn_w, btn_h));
+            m_game_over_buttons.push_back(zwodee::button("Restart", btn_x, 260.0f, btn_w, btn_h));
+            m_game_over_buttons.push_back(zwodee::button("Main Menu", btn_x, 330.0f, btn_w, btn_h));
+            m_game_over_buttons.push_back(zwodee::button("Exit", btn_x, 400.0f, btn_w, btn_h));
 
             // Mouse controls
             float mx = 0.0f, my = 0.0f;
@@ -211,8 +218,8 @@ namespace digx
             float btn_x = (screen_w - btn_w) * 0.5f;
 
             m_game_won_buttons.clear();
-            m_game_won_buttons.push_back(button("Restart Game", btn_x, 260.0f, btn_w, btn_h));
-            m_game_won_buttons.push_back(button("Main Menu", btn_x, 330.0f, btn_w, btn_h));
+            m_game_won_buttons.push_back(zwodee::button("Restart Game", btn_x, 260.0f, btn_w, btn_h));
+            m_game_won_buttons.push_back(zwodee::button("Main Menu", btn_x, 330.0f, btn_w, btn_h));
 
             // Mouse controls
             float mx = 0.0f, my = 0.0f;
@@ -290,29 +297,39 @@ namespace digx
             m_pause_buttons.clear();
             if (!m_in_settings)
             {
-                m_pause_buttons.push_back(button("Resume", btn_x, 260.0f, btn_w, btn_h));
-                m_pause_buttons.push_back(button("Settings", btn_x, 330.0f, btn_w, btn_h));
-                m_pause_buttons.push_back(button("Back to Main Menu", btn_x, 400.0f, btn_w, btn_h));
-                m_pause_buttons.push_back(button("Exit", btn_x, 470.0f, btn_w, btn_h));
+                m_pause_buttons.push_back(zwodee::button("Resume", btn_x, 260.0f, btn_w, btn_h));
+                m_pause_buttons.push_back(zwodee::button("Settings", btn_x, 330.0f, btn_w, btn_h));
+                m_pause_buttons.push_back(zwodee::button("Back to Main Menu", btn_x, 400.0f, btn_w, btn_h));
+                m_pause_buttons.push_back(zwodee::button("Exit", btn_x, 470.0f, btn_w, btn_h));
             }
             else
             {
                 bool sound_enabled = !m_engine->get_audio_manager().is_muted();
-                m_pause_buttons.push_back(button(sound_enabled ? "Sound: ON" : "Sound: OFF", btn_x, 260.0f, btn_w, btn_h));
 
-                std::string fps_label = "FPS Cap: Unknown";
+                m_sound_switch.set_position(btn_x, 240.0f);
+                m_sound_switch.set_size(btn_w, 40.0f);
+                m_sound_switch.set_on(sound_enabled);
+
+                m_volume_slider.set_position(btn_x, 315.0f);
+                m_volume_slider.set_size(btn_w, 40.0f);
+                m_volume_slider.set_value(m_engine->get_audio_manager().get_volume());
+                m_volume_slider.set_enabled(sound_enabled);
+
+                m_pause_buttons.clear();
+
+                std::string fps_val = "VSync";
                 switch (m_engine->get_fps_limit())
                 {
-                    case zwodee::engine::fps_limit::vsync:    fps_label = "FPS Cap: VSync"; break;
-                    case zwodee::engine::fps_limit::fps_60:   fps_label = "FPS Cap: 60 FPS"; break;
-                    case zwodee::engine::fps_limit::fps_144:  fps_label = "FPS Cap: 144 FPS"; break;
-                    case zwodee::engine::fps_limit::fps_240:  fps_label = "FPS Cap: 240 FPS"; break;
-                    case zwodee::engine::fps_limit::fps_360:  fps_label = "FPS Cap: 360 FPS"; break;
-                    case zwodee::engine::fps_limit::fps_480:  fps_label = "FPS Cap: 480 FPS"; break;
-                    case zwodee::engine::fps_limit::unlocked: fps_label = "FPS Cap: Unlocked"; break;
+                    case zwodee::engine::fps_limit::vsync:    fps_val = "VSync"; break;
+                    case zwodee::engine::fps_limit::fps_60:   fps_val = "60 FPS"; break;
+                    case zwodee::engine::fps_limit::fps_144:  fps_val = "144 FPS"; break;
+                    case zwodee::engine::fps_limit::fps_240:  fps_val = "240 FPS"; break;
+                    case zwodee::engine::fps_limit::fps_360:  fps_val = "360 FPS"; break;
+                    case zwodee::engine::fps_limit::fps_480:  fps_val = "480 FPS"; break;
+                    case zwodee::engine::fps_limit::unlocked: fps_val = "Unlocked"; break;
                 }
-                m_pause_buttons.push_back(button(fps_label, btn_x, 330.0f, btn_w, btn_h));
-                m_pause_buttons.push_back(button("Back", btn_x, 400.0f, btn_w, btn_h));
+                m_pause_buttons.push_back(zwodee::button(fps_val, btn_x, 390.0f, btn_w, 40.0f));
+                m_pause_buttons.push_back(zwodee::button("Back", btn_x, 465.0f, btn_w, 40.0f));
             }
 
             // Mouse controls
@@ -333,33 +350,33 @@ namespace digx
             prev_mx_pause = mx;
             prev_my_pause = my;
 
-            bool hovered_any = false;
-            for (size_t i = 0; i < m_pause_buttons.size(); ++i)
+            if (!m_in_settings)
             {
-                if (m_pause_buttons[i].is_hovered(mx, my))
+                bool hovered_any = false;
+                for (size_t i = 0; i < m_pause_buttons.size(); ++i)
                 {
-                    if (mouse_moved) m_pause_selected_index = static_cast<int>(i);
-                    hovered_any = true;
-                    break;
+                    if (m_pause_buttons[i].is_hovered(mx, my))
+                    {
+                        if (mouse_moved) m_pause_selected_index = static_cast<int>(i);
+                        hovered_any = true;
+                        break;
+                    }
                 }
-            }
 
-            // Keyboard navigation
-            if (m_current_input.is_down(zwodee::input_state::move_up) && !m_last_input.is_down(zwodee::input_state::move_up))
-            {
-                m_pause_selected_index = (m_pause_selected_index - 1 + static_cast<int>(m_pause_buttons.size())) % static_cast<int>(m_pause_buttons.size());
-            }
-            else if (m_current_input.is_down(zwodee::input_state::move_down) && !m_last_input.is_down(zwodee::input_state::move_down))
-            {
-                m_pause_selected_index = (m_pause_selected_index + 1) % static_cast<int>(m_pause_buttons.size());
-            }
+                // Keyboard navigation
+                if (m_current_input.is_down(zwodee::input_state::move_up) && !m_last_input.is_down(zwodee::input_state::move_up))
+                {
+                    m_pause_selected_index = (m_pause_selected_index - 1 + static_cast<int>(m_pause_buttons.size())) % static_cast<int>(m_pause_buttons.size());
+                }
+                else if (m_current_input.is_down(zwodee::input_state::move_down) && !m_last_input.is_down(zwodee::input_state::move_down))
+                {
+                    m_pause_selected_index = (m_pause_selected_index + 1) % static_cast<int>(m_pause_buttons.size());
+                }
 
-            // Trigger selected menu item
-            bool trigger_action = (m_current_input.is_down(zwodee::input_state::action_1) && !m_last_input.is_down(zwodee::input_state::action_1)) || (left_clicked && hovered_any);
+                // Trigger selected menu item
+                bool trigger_action = (m_current_input.is_down(zwodee::input_state::action_1) && !m_last_input.is_down(zwodee::input_state::action_1)) || (left_clicked && hovered_any);
 
-            if (trigger_action)
-            {
-                if (!m_in_settings)
+                if (trigger_action)
                 {
                     if (m_pause_selected_index == 0) // Resume
                     {
@@ -369,6 +386,7 @@ namespace digx
                     {
                         m_in_settings = true;
                         m_pause_selected_index = 0;
+                        m_volume_slider.reset_drag();
                     }
                     else if (m_pause_selected_index == 2) // Back to Main Menu
                     {
@@ -382,14 +400,81 @@ namespace digx
                         m_engine->stop();
                     }
                 }
-                else
+            }
+            else
+            {
+                int total_settings_items = 4;
+                bool sound_enabled = !m_engine->get_audio_manager().is_muted();
+
+                if (sound_enabled)
                 {
-                    if (m_pause_selected_index == 0) // Sound toggle
+                    if (m_volume_slider.handle_mouse(mx, my, is_left_down, left_clicked))
                     {
-                        bool sound_enabled = !m_engine->get_audio_manager().is_muted();
-                        m_engine->get_audio_manager().set_muted(sound_enabled);
+                        m_engine->get_audio_manager().set_volume(m_volume_slider.get_value());
+                        config_manager::save_config(*m_engine);
                     }
-                    else if (m_pause_selected_index == 1) // FPS Cap toggle
+                }
+
+                bool hovered_any = false;
+                if (m_sound_switch.is_hovered(mx, my))
+                {
+                    if (mouse_moved) m_pause_selected_index = 0;
+                    hovered_any = true;
+                }
+                else if (m_volume_slider.is_hovered(mx, my))
+                {
+                    if (mouse_moved) m_pause_selected_index = 1;
+                    hovered_any = true;
+                }
+                else if (m_pause_buttons[0].is_hovered(mx, my))
+                {
+                    if (mouse_moved) m_pause_selected_index = 2;
+                    hovered_any = true;
+                }
+                else if (m_pause_buttons[1].is_hovered(mx, my))
+                {
+                    if (mouse_moved) m_pause_selected_index = 3;
+                    hovered_any = true;
+                }
+
+                if (m_current_input.is_down(zwodee::input_state::move_up) && !m_last_input.is_down(zwodee::input_state::move_up))
+                {
+                    m_pause_selected_index = (m_pause_selected_index - 1 + total_settings_items) % total_settings_items;
+                }
+                else if (m_current_input.is_down(zwodee::input_state::move_down) && !m_last_input.is_down(zwodee::input_state::move_down))
+                {
+                    m_pause_selected_index = (m_pause_selected_index + 1) % total_settings_items;
+                }
+
+                if (m_pause_selected_index == 1 && sound_enabled)
+                {
+                    if (m_current_input.is_down(zwodee::input_state::move_left) && !m_last_input.is_down(zwodee::input_state::move_left))
+                    {
+                        m_volume_slider.adjust_value(-0.05f);
+                        m_engine->get_audio_manager().set_volume(m_volume_slider.get_value());
+                        config_manager::save_config(*m_engine);
+                    }
+                    else if (m_current_input.is_down(zwodee::input_state::move_right) && !m_last_input.is_down(zwodee::input_state::move_right))
+                    {
+                        m_volume_slider.adjust_value(+0.05f);
+                        m_engine->get_audio_manager().set_volume(m_volume_slider.get_value());
+                        config_manager::save_config(*m_engine);
+                    }
+                }
+
+                bool trigger_action = (m_current_input.is_down(zwodee::input_state::action_1) && !m_last_input.is_down(zwodee::input_state::action_1)) || (left_clicked && hovered_any);
+
+                if (trigger_action)
+                {
+                    if (m_pause_selected_index == 0) // Sound toggle switch
+                    {
+                        bool is_muted = m_engine->get_audio_manager().is_muted();
+                        m_engine->get_audio_manager().set_muted(!is_muted);
+                        m_sound_switch.set_on(is_muted);
+                        m_volume_slider.set_enabled(is_muted);
+                        config_manager::save_config(*m_engine);
+                    }
+                    else if (m_pause_selected_index == 2) // FPS Cap toggle
                     {
                         zwodee::engine::fps_limit next_limit = zwodee::engine::fps_limit::vsync;
                         switch (m_engine->get_fps_limit())
@@ -403,8 +488,9 @@ namespace digx
                             case zwodee::engine::fps_limit::unlocked: next_limit = zwodee::engine::fps_limit::vsync; break;
                         }
                         m_engine->set_fps_limit(next_limit);
+                        config_manager::save_config(*m_engine);
                     }
-                    else if (m_pause_selected_index == 2) // Back
+                    else if (m_pause_selected_index == 3) // Back
                     {
                         m_in_settings = false;
                         m_pause_selected_index = 1; // Highlight settings option
@@ -472,6 +558,43 @@ namespace digx
                 }
             }
         }
+
+        if (m_level_finish_sequence_ticks > 0)
+        {
+            m_level_finish_sequence_ticks--;
+            if (m_level_finish_sequence_ticks == 0)
+            {
+                advance_to_next_level();
+            }
+            return;
+        }
+
+        if (m_level_entry_fade_ticks > 0)
+        {
+            m_level_entry_fade_ticks--;
+            return;
+        }
+
+        // Update active explosion hazards and kill player if stepping onto an exploding tile
+        for (auto& exp : m_active_explosions)
+        {
+            if (exp.ticks_remaining > 0)
+            {
+                exp.ticks_remaining--;
+                if (m_player && !m_player->is_dead())
+                {
+                    int pgx = static_cast<int>(std::round(m_player->get_x() / 32.0f));
+                    int pgy = static_cast<int>(std::round(m_player->get_y() / 32.0f));
+                    if (pgx == exp.gx && pgy == exp.gy)
+                    {
+                        m_player->take_damage(999);
+                    }
+                }
+            }
+        }
+        std::erase_if(m_active_explosions, [](const active_explosion& exp) {
+            return exp.ticks_remaining <= 0;
+        });
 
         if (m_player->is_dead())
         {
@@ -543,7 +666,7 @@ namespace digx
         py = m_player->get_y();
 
         // Check if player reaches ANY open exit door
-        if (m_exit_open)
+        if (m_exit_open && m_level_finish_sequence_ticks == -1)
         {
             for (const auto& ent : get_entities())
             {
@@ -555,7 +678,19 @@ namespace digx
                         float dy = py - door->get_y();
                         if (std::sqrt(dx * dx + dy * dy) < 24.0f)
                         {
-                            advance_to_next_level();
+                            int next_level = m_level_number + 1;
+                            std::string next_file = "assets/levels/level" + std::to_string(next_level) + ".zwl";
+                            std::ifstream f(next_file);
+                            bool has_next_level = f.good();
+
+                            if (has_next_level)
+                            {
+                                m_level_finish_sequence_ticks = 96; // Fade to black sequence for next level
+                            }
+                            else
+                            {
+                                advance_to_next_level(); // Instantly show win screen without fade
+                            }
                             return;
                         }
                     }
@@ -808,8 +943,8 @@ namespace digx
                                 if (st->is_falling())
                                 {
                                     int st_gx = static_cast<int>(std::round(st->get_x() / 32.0f));
-                                    int p_gx = static_cast<int>(std::round(m_player->get_x() / 32.0f));
-                                    if (st_gx == p_gx)
+                                    int player_gx = static_cast<int>(std::round(m_player->get_x() / 32.0f));
+                                    if (st_gx == player_gx)
                                     {
                                         m_player->take_damage(999);
                                     }
@@ -834,6 +969,13 @@ namespace digx
                                         int ot_gx = static_cast<int>(std::round(other->get_x() / 32.0f));
                                         if (st_gx == ot_gx)
                                         {
+                                            if (dynamic_cast<soldier*>(other.get()))
+                                            {
+                                                if (auto* audio = m_player ? m_player->get_audio_manager() : nullptr)
+                                                {
+                                                    audio->play_sound("death");
+                                                }
+                                            }
                                             other->take_damage(999);
                                         }
                                     }
@@ -1112,10 +1254,13 @@ namespace digx
         m_current_darkness = 1.0f;
         m_game_over = false;
         m_death_sequence_ticks = -1;
+        m_level_finish_sequence_ticks = -1;
+        m_level_entry_fade_ticks = 32;
         m_game_over_selected_index = 0;
         m_fart_effect_ticks = 0;
         m_fart_x = 0.0f;
         m_fart_y = 0.0f;
+        m_active_explosions.clear();
 
         clear_level();
         init(*m_engine, m_level_name);
@@ -1222,6 +1367,7 @@ namespace digx
                 {
                     // Dig the tile (turns static stones and un-digged areas into digged tiles)
                     dig_tile(x, y);
+                    m_active_explosions.push_back({x, y, 128});
                 }
             }
         }
@@ -1250,6 +1396,13 @@ namespace digx
 
                 if (!is_item)
                 {
+                    if (dynamic_cast<soldier*>(ent.get()))
+                    {
+                        if (auto* audio = m_player ? m_player->get_audio_manager() : nullptr)
+                        {
+                            audio->play_sound("death");
+                        }
+                    }
                     ent->take_damage(999);
                 }
             }
@@ -1458,6 +1611,44 @@ namespace digx
                 snapshot.push_back(fart_node);
             }
 
+            // Explosion visual effect nodes
+            if (texture_cache::get().explosion_tex.get())
+            {
+                for (const auto& exp : m_active_explosions)
+                {
+                    if (exp.ticks_remaining > 0)
+                    {
+                        float progress = 1.0f - (static_cast<float>(exp.ticks_remaining) / 128.0f);
+                        float alpha = 0.0f;
+                        if (progress < 0.5f)
+                        {
+                            alpha = progress * 2.0f;
+                        }
+                        else
+                        {
+                            alpha = (1.0f - progress) * 2.0f;
+                        }
+                        uint8_t color_val = static_cast<uint8_t>(alpha * 255.0f);
+
+                        zwodee::render_node exp_node{};
+                        exp_node.x = exp.gx * 32.0f;
+                        exp_node.y = exp.gy * 32.0f;
+                        exp_node.w = 32.0f;
+                        exp_node.h = 32.0f;
+                        exp_node.tex = texture_cache::get().explosion_tex.get();
+                        exp_node.src_x = 0;
+                        exp_node.src_y = 0;
+                        exp_node.src_w = texture_cache::get().explosion_tex->get_width();
+                        exp_node.src_h = texture_cache::get().explosion_tex->get_height();
+                        exp_node.flip_horizontal = false;
+                        exp_node.flip_vertical = false;
+                        exp_node.is_ui = false;
+                        exp_node.color_mod = color_val;
+                        snapshot.push_back(exp_node);
+                    }
+                }
+            }
+
             // Apply the camera offset to all rendering positions
             for (auto& node : snapshot)
             {
@@ -1500,6 +1691,7 @@ namespace digx
                         node.tex == texture_cache::get().dirt_breaking_texs[1].get() ||
                         node.tex == texture_cache::get().dirt_breaking_texs[2].get() ||
                         (texture_cache::get().fart_tex.get() && node.tex == texture_cache::get().fart_tex.get()) ||
+                        (texture_cache::get().explosion_tex.get() && node.tex == texture_cache::get().explosion_tex.get()) ||
                         (texture_cache::get().vampire_sleeping_tex.get() && node.tex == texture_cache::get().vampire_sleeping_tex.get()) ||
                         (texture_cache::get().vampire_triggered_tex.get() && node.tex == texture_cache::get().vampire_triggered_tex.get()))
                     {
@@ -1790,10 +1982,38 @@ namespace digx
                     snapshot.insert(snapshot.end(), sub_nodes.begin(), sub_nodes.end());
                 }
 
-                // 3. Render Buttons
-                for (size_t i = 0; i < m_pause_buttons.size(); ++i)
+                // 3. Render Buttons / UI
+                if (!m_in_settings)
                 {
-                    m_pause_buttons[i].add_to_snapshot(snapshot, *m_font, m_pause_selected_index == static_cast<int>(i));
+                    for (size_t i = 0; i < m_pause_buttons.size(); ++i)
+                    {
+                        m_pause_buttons[i].add_to_snapshot(snapshot, *m_font, m_pause_selected_index == static_cast<int>(i));
+                    }
+                }
+                else
+                {
+                    // Sound Switch (Index 0)
+                    m_sound_switch.add_to_snapshot(snapshot, *m_font, m_pause_selected_index == 0);
+
+                    // Volume Slider (Index 1)
+                    m_volume_slider.add_to_snapshot(snapshot, *m_font, m_pause_selected_index == 1);
+
+                    // FPS Cap Label & Button (Index 2)
+                    std::string fps_title = "FPS Cap";
+                    float label_scale = 0.35f;
+                    float fps_w = 0.0f;
+                    for (char c : fps_title) fps_w += m_font->get_glyph(c).xadvance * label_scale;
+                    float fx = (screen_w - fps_w) * 0.5f;
+                    float fy = m_pause_buttons[0].get_y() - 6.0f;
+
+                    std::vector<zwodee::render_node> fps_nodes = m_font->get_text_nodes(fps_title, fx, fy, label_scale, 200, 200, 200, 255);
+                    for (auto& node : fps_nodes) node.is_ui = true;
+                    snapshot.insert(snapshot.end(), fps_nodes.begin(), fps_nodes.end());
+
+                    m_pause_buttons[0].add_to_snapshot(snapshot, *m_font, m_pause_selected_index == 2);
+
+                    // Back Button (Index 3)
+                    m_pause_buttons[1].add_to_snapshot(snapshot, *m_font, m_pause_selected_index == 3);
                 }
             }
         }
@@ -1818,6 +2038,47 @@ namespace digx
             auto text_nodes = m_font->get_text_nodes(console_text, 10.0f, 28.0f, 0.3f, 0, 255, 0, 255); // Green text
             for (auto& node : text_nodes) node.is_ui = true;
             snapshot.insert(snapshot.end(), text_nodes.begin(), text_nodes.end());
+        }
+
+        // Render black fade transition for finishing level / entering level (if not in Game Over or Win screen)
+        if (!m_game_won && !m_game_over)
+        {
+            if (m_level_finish_sequence_ticks >= 0)
+            {
+                float progress = 1.0f - (static_cast<float>(m_level_finish_sequence_ticks) / 96.0f);
+                progress = std::clamp(progress, 0.0f, 1.0f);
+
+                zwodee::render_node black_overlay{};
+                black_overlay.x = 0.0f;
+                black_overlay.y = 0.0f;
+                black_overlay.w = static_cast<float>(display_w);
+                black_overlay.h = static_cast<float>(display_h);
+                black_overlay.tex = nullptr;
+                black_overlay.is_ui = true;
+                black_overlay.r = 0;
+                black_overlay.g = 0;
+                black_overlay.b = 0;
+                black_overlay.a = static_cast<uint8_t>(progress * 255.0f);
+                snapshot.push_back(black_overlay);
+            }
+            else if (m_level_entry_fade_ticks > 0)
+            {
+                float progress = static_cast<float>(m_level_entry_fade_ticks) / 32.0f;
+                progress = std::clamp(progress, 0.0f, 1.0f);
+
+                zwodee::render_node black_overlay{};
+                black_overlay.x = 0.0f;
+                black_overlay.y = 0.0f;
+                black_overlay.w = static_cast<float>(display_w);
+                black_overlay.h = static_cast<float>(display_h);
+                black_overlay.tex = nullptr;
+                black_overlay.is_ui = true;
+                black_overlay.r = 0;
+                black_overlay.g = 0;
+                black_overlay.b = 0;
+                black_overlay.a = static_cast<uint8_t>(progress * 255.0f);
+                snapshot.push_back(black_overlay);
+            }
         }
  
         return snapshot;
@@ -2067,6 +2328,7 @@ namespace digx
         else
         {
             // WINNER!
+            m_level_finish_sequence_ticks = -1;
             m_game_won = true;
             m_game_won_selected_index = 0;
             if (auto* audio = m_player ? m_player->get_audio_manager() : nullptr)

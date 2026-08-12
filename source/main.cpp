@@ -1,5 +1,6 @@
 #include "digx-game.hpp"
 #include "levels/digx-main-menu.hpp"
+#include "config-manager.hpp"
 
 #include <iostream>
 #include <memory>
@@ -13,6 +14,9 @@ int main(int argc, char* argv[])
 
     // Create engine instance
     zwodee::engine engine("DigX", 1280, 720, true);
+
+    // Load saved configuration settings
+    digx::config_manager::load_config(engine);
 
     // Create and register start menu
     auto menu = std::make_unique<digx::main_menu>(engine);

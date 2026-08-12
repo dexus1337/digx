@@ -9,7 +9,6 @@
  */
 
 #include "zwodee.hpp"
-#include "levels/digx-button.hpp"
 #include <array>
 
 namespace digx
@@ -96,6 +95,14 @@ namespace digx
         float m_fart_x = 0.0f;
         float m_fart_y = 0.0f;
 
+        // Explosion visual effect & hazard tracking
+        struct active_explosion {
+            int gx = 0;
+            int gy = 0;
+            int ticks_remaining = 128;
+        };
+        std::vector<active_explosion> m_active_explosions;
+
         // Pause state members
         bool m_is_paused = false;
         bool m_in_settings = false;
@@ -103,19 +110,23 @@ namespace digx
         zwodee::input_state m_last_input{};
         zwodee::input_state m_current_input{};
         std::unique_ptr<zwodee::font> m_font;
-        std::vector<button> m_pause_buttons;
+        std::vector<zwodee::button> m_pause_buttons;
+        zwodee::toggle_switch m_sound_switch;
+        zwodee::slider m_volume_slider;
         uint32_t m_ignored_buttons = 0;
         bool m_first_input = true;
 
         // Game Over state members
         bool m_game_over = false;
         int m_death_sequence_ticks = -1;
-        std::vector<button> m_game_over_buttons;
+        int m_level_finish_sequence_ticks = -1;
+        int m_level_entry_fade_ticks = 32;
+        std::vector<zwodee::button> m_game_over_buttons;
         int m_game_over_selected_index = 0;
 
         // Game Won (Winner) state members
         bool m_game_won = false;
-        std::vector<button> m_game_won_buttons;
+        std::vector<zwodee::button> m_game_won_buttons;
         int m_game_won_selected_index = 0;
 
     public:

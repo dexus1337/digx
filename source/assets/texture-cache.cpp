@@ -95,6 +95,7 @@ namespace digx
         vampire_triggered_tex         = r.load_dds_texture("assets/textures/vampire-triggered.dds");
         player_dead_tex               = r.load_dds_texture("assets/textures/goblin-dead.dds");
         fart_tex                      = r.load_dds_texture("assets/textures/fart.dds");
+        explosion_tex                 = r.load_dds_texture("assets/textures/explosion.dds");
         soldier_tex                   = r.load_dds_texture("assets/textures/soldier-front.dds");
         soldier_front_tex             = r.load_dds_texture("assets/textures/soldier-front.dds");
         soldier_back_tex              = r.load_dds_texture("assets/textures/soldier-back.dds");
