@@ -23,12 +23,15 @@ namespace digx
 
         void update_behavior(player* player);
 
+        void render(zwodee::renderer& target_renderer, double alpha) override;
+        zwodee::render_node get_render_node() const override;
+
         bool is_active() const;
         bool is_neutralized() const;
 
     private:
         bool m_is_active = false;
-        bool m_is_neutralized = false;
+        int m_neutralized_ticks = 0;
         zwodee::render_node m_snorZ{};
     };
 }

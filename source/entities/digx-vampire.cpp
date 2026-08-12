@@ -25,7 +25,15 @@ namespace digx
         m_vy = 0.0f;
         auto& tc = texture_cache::get();
 
-        if (!player || m_is_neutralized)
+        if (m_neutralized_ticks > 0)
+        {
+            m_neutralized_ticks--;
+            m_is_active = false;
+            set_texture(tc.vampire_sleeping_tex.get());
+            return;
+        }
+
+        if (!player)
         {
             set_texture(tc.vampire_sleeping_tex.get());
             return;
@@ -59,25 +67,12 @@ namespace digx
         }
         else
         {
-            if (auto tex = texture_cache::get().vampire_sleeping_tex.get())
-            {
-                float fw = static_cast<float>(tex->get_width());
-                float fh = static_cast<float>(tex->get_height());
-                m_snorZ.tex = tex;
-                m_snorZ.src_x = 0;
-                m_snorZ.src_y = 0;
-                m_snorZ.src_w = static_cast<int>(fw);
-                m_snorZ.src_h = static_cast<int>(fh);
-                m_snorZ.w = fw;
-                m_snorZ.h = fh;
-                m_snorZ.is_ui = false;
-            }
             set_texture(tc.vampire_sleeping_tex.get());
         }
 
         if (m_is_active && player->get_breath_active_time() > 0.0f)
         {
-            m_is_neutralized = true;
+            m_neutralized_ticks = 640; // Stunned for 5 seconds (640 ticks at 128Hz)
             m_is_active = false;
             set_texture(texture_cache::get().vampire_sleeping_tex.get());
             return;
@@ -88,7 +83,7 @@ namespace digx
             if (player->get_garlic_count() > 0)
             {
                 player->use_garlic();
-                m_is_neutralized = true;
+                m_neutralized_ticks = 640; // Stunned for 5 seconds
                 m_is_active = false;
                 set_texture(texture_cache::get().vampire_sleeping_tex.get());
             }
@@ -99,6 +94,40 @@ namespace digx
         }
     }
 
+    void vampire::render(zwodee::renderer& target_renderer, double alpha)
+    {
+        if (!m_texture) return;
+        float render_x = m_x + (m_vx * static_cast<float>(alpha));
+        float render_y = m_y + (m_vy * static_cast<float>(alpha));
+
+        if (m_neutralized_ticks > 0)
+        {
+            render_x += std::sin(static_cast<float>(m_neutralized_ticks) * 0.375f) * 2.0f;
+        }
+
+        int frame_width = m_texture->get_width();
+        int frame_height = m_texture->get_height();
+        target_renderer.draw_sprite(*m_texture, 0, 0, frame_width, frame_height, render_x, render_y, m_width, m_height);
+    }
+
+    zwodee::render_node vampire::get_render_node() const
+    {
+        if (!m_texture)
+        {
+            return zwodee::render_node{ m_x, m_y, m_width, m_height, nullptr, 0, 0, 0, 0 };
+        }
+        int frame_width = m_texture->get_width();
+        int frame_height = m_texture->get_height();
+
+        float rx = m_x;
+        if (m_neutralized_ticks > 0)
+        {
+            rx += std::sin(static_cast<float>(m_neutralized_ticks) * 0.375f) * 2.0f;
+        }
+
+        return zwodee::render_node{ rx, m_y, m_width, m_height, m_texture, 0, 0, frame_width, frame_height };
+    }
+
     bool vampire::is_active() const
     {
         return m_is_active;
@@ -106,6 +135,6 @@ namespace digx
 
     bool vampire::is_neutralized() const
     {
-        return m_is_neutralized;
+        return m_neutralized_ticks > 0;
     }
 }

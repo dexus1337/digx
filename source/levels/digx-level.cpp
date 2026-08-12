@@ -16,6 +16,7 @@
 #include "config-manager.hpp"
 
 #include <SDL3/SDL.h>
+#include <iostream>
 #include <cmath>
 #include <algorithm>
 #include <fstream>
@@ -124,6 +125,84 @@ namespace digx
                         }
                     }
                     catch(...) {}
+                }
+                else if (cmd.rfind("tool ", 0) == 0)
+                {
+                    std::string target = cmd.substr(5);
+                    if (target == "pickaxe" || target == "1")
+                    {
+                        m_player->set_has_pickaxe(true);
+                        std::cout << "[Console] Equipped Pickaxe." << std::endl;
+                    }
+                    else if (target == "shovel" || target == "0")
+                    {
+                        m_player->set_has_pickaxe(false);
+                        std::cout << "[Console] Equipped Shovel." << std::endl;
+                    }
+                }
+                else if (cmd.rfind("speed ", 0) == 0)
+                {
+                    try
+                    {
+                        std::string sub = cmd.substr(6);
+                        if (sub.rfind("shovel ", 0) == 0)
+                        {
+                            int val = std::stoi(sub.substr(7));
+                            m_player->set_shovel_dig_ticks(val);
+                            std::cout << "[Console] Shovel dig duration set to " << val << " ticks." << std::endl;
+                        }
+                        else if (sub.rfind("pickaxe ", 0) == 0)
+                        {
+                            int val = std::stoi(sub.substr(8));
+                            m_player->set_pickaxe_dig_ticks(val);
+                            std::cout << "[Console] Pickaxe dig duration set to " << val << " ticks." << std::endl;
+                        }
+                        else if (sub.rfind("move ", 0) == 0)
+                        {
+                            float val = std::stof(sub.substr(5));
+                            m_player->set_tunnel_speed(val);
+                            std::cout << "[Console] Player movement speed set to " << val << "." << std::endl;
+                        }
+                    }
+                    catch(...) {}
+                }
+                else if (cmd.rfind("shovel_speed ", 0) == 0)
+                {
+                    try
+                    {
+                        int val = std::stoi(cmd.substr(13));
+                        m_player->set_shovel_dig_ticks(val);
+                        std::cout << "[Console] Shovel dig duration set to " << val << " ticks." << std::endl;
+                    }
+                    catch(...) {}
+                }
+                else if (cmd.rfind("pickaxe_speed ", 0) == 0)
+                {
+                    try
+                    {
+                        int val = std::stoi(cmd.substr(14));
+                        m_player->set_pickaxe_dig_ticks(val);
+                        std::cout << "[Console] Pickaxe dig duration set to " << val << " ticks." << std::endl;
+                    }
+                    catch(...) {}
+                }
+                else if (cmd.rfind("movespeed ", 0) == 0)
+                {
+                    try
+                    {
+                        float val = std::stof(cmd.substr(10));
+                        m_player->set_tunnel_speed(val);
+                        std::cout << "[Console] Player movement speed set to " << val << "." << std::endl;
+                    }
+                    catch(...) {}
+                }
+                else if (cmd == "motherlode")
+                {
+                    m_player->collect_garlic(5000);
+                    m_player->collect_onion(5000);
+                    m_player->set_shovel_dig_ticks(0);
+                    m_player->set_pickaxe_dig_ticks(0);
+                    std::cout << "[Console] Cheat activated: motherlode! Added 5000 garlic, 5000 onions, and set dig speed to 0." << std::endl;
                 }
             }
         }
@@ -738,108 +817,125 @@ namespace digx
                 {
                     dl->take_damage(999);
 
-                    diamond* revealed_diamond = nullptr;
-
-                    // 1. Check if the lamp has a specific target diamond
-                    if (auto* target = dl->get_target_diamond())
+                    if (dl->reveals_all_diamonds())
                     {
-                        if (!target->is_dead() && !target->is_permanently_revealed())
-                        {
-                            int gx = static_cast<int>(std::round(target->get_x() / 32.0f));
-                            int gy = static_cast<int>(std::round(target->get_y() / 32.0f));
-                            if (!is_tile_digged(gx, gy))
-                            {
-                                revealed_diamond = target;
-                            }
-                        }
-                    }
-
-                    // 2. Fallback to visible or nearest diamond
-                    if (!revealed_diamond)
-                    {
-                        float camera_x = 0.0f;
-                        float camera_y = 0.0f;
-                        float win_w = 1280.0f;
-                        float win_h = 720.0f;
-                        if (m_engine)
-                        {
-                            win_w = static_cast<float>(m_engine->get_window().get_width());
-                            win_h = static_cast<float>(m_engine->get_window().get_height());
-                        }
-
-                        float curr_px = m_player ? m_player->get_x() : 0.0f;
-                        float curr_py = m_player ? m_player->get_y() : 0.0f;
-
-                        // Horizontal page flipping camera logic matching get_render_snapshot
-                        int page_x = static_cast<int>(std::floor(curr_px / win_w));
-                        int max_page_x = static_cast<int>(std::max(0.0f, std::floor((get_width() * 32.0f - 1.0f) / win_w)));
-                        if (page_x < 0) page_x = 0;
-                        if (page_x > max_page_x) page_x = max_page_x;
-                        camera_x = page_x * win_w;
-
-                        // Vertical smooth centering camera logic matching get_render_snapshot
-                        float half_height = win_h / 2.0f;
-                        camera_y = curr_py - half_height;
-                        float max_camera_y = static_cast<float>(get_height() * 32) - win_h;
-                        if (max_camera_y < 0.0f) max_camera_y = 0.0f;
-                        if (camera_y < 0.0f) camera_y = 0.0f;
-                        if (camera_y > max_camera_y) camera_y = max_camera_y;
-
-                        std::vector<diamond*> visible_diamonds;
-                        std::vector<diamond*> all_non_digged_diamonds;
-
+                        // Reveal ALL hidden diamonds on the map!
                         for (const auto& other : get_entities())
                         {
                             if (auto* dm = dynamic_cast<diamond*>(other.get()))
                             {
-                                if (!dm->is_dead() && !dm->is_permanently_revealed())
+                                if (!dm->is_dead())
                                 {
-                                    int gx = static_cast<int>(std::round(dm->get_x() / 32.0f));
-                                    int gy = static_cast<int>(std::round(dm->get_y() / 32.0f));
-                                    if (!is_tile_digged(gx, gy))
-                                    {
-                                        all_non_digged_diamonds.push_back(dm);
+                                    dm->set_permanently_revealed(true);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        diamond* revealed_diamond = nullptr;
 
-                                        float dx = dm->get_x();
-                                        float dy = dm->get_y();
-                                        if (dx >= camera_x && dx <= camera_x + win_w &&
-                                            dy >= camera_y && dy <= camera_y + win_h)
+                        // 1. Check if the lamp has a specific target diamond
+                        if (auto* target = dl->get_target_diamond())
+                        {
+                            if (!target->is_dead() && !target->is_permanently_revealed())
+                            {
+                                int gx = static_cast<int>(std::round(target->get_x() / 32.0f));
+                                int gy = static_cast<int>(std::round(target->get_y() / 32.0f));
+                                if (!is_tile_digged(gx, gy))
+                                {
+                                    revealed_diamond = target;
+                                }
+                            }
+                        }
+
+                        // 2. Fallback to visible or nearest diamond
+                        if (!revealed_diamond)
+                        {
+                            float camera_x = 0.0f;
+                            float camera_y = 0.0f;
+                            float win_w = 1280.0f;
+                            float win_h = 720.0f;
+                            if (m_engine)
+                            {
+                                win_w = static_cast<float>(m_engine->get_window().get_width());
+                                win_h = static_cast<float>(m_engine->get_window().get_height());
+                            }
+
+                            float curr_px = m_player ? m_player->get_x() : 0.0f;
+                            float curr_py = m_player ? m_player->get_y() : 0.0f;
+
+                            // Horizontal page flipping camera logic matching get_render_snapshot
+                            int page_x = static_cast<int>(std::floor(curr_px / win_w));
+                            int max_page_x = static_cast<int>(std::max(0.0f, std::floor((get_width() * 32.0f - 1.0f) / win_w)));
+                            if (page_x < 0) page_x = 0;
+                            if (page_x > max_page_x) page_x = max_page_x;
+                            camera_x = page_x * win_w;
+
+                            // Vertical smooth centering camera logic matching get_render_snapshot
+                            float half_height = win_h / 2.0f;
+                            camera_y = curr_py - half_height;
+                            float max_camera_y = static_cast<float>(get_height() * 32) - win_h;
+                            if (max_camera_y < 0.0f) max_camera_y = 0.0f;
+                            if (camera_y < 0.0f) camera_y = 0.0f;
+                            if (camera_y > max_camera_y) camera_y = max_camera_y;
+
+                            std::vector<diamond*> visible_diamonds;
+                            std::vector<diamond*> all_non_digged_diamonds;
+
+                            for (const auto& other : get_entities())
+                            {
+                                if (auto* dm = dynamic_cast<diamond*>(other.get()))
+                                {
+                                    if (!dm->is_dead() && !dm->is_permanently_revealed())
+                                    {
+                                        int gx = static_cast<int>(std::round(dm->get_x() / 32.0f));
+                                        int gy = static_cast<int>(std::round(dm->get_y() / 32.0f));
+                                        if (!is_tile_digged(gx, gy))
                                         {
-                                            visible_diamonds.push_back(dm);
+                                            all_non_digged_diamonds.push_back(dm);
+
+                                            float dx = dm->get_x();
+                                            float dy = dm->get_y();
+                                            if (dx >= camera_x && dx <= camera_x + win_w &&
+                                                dy >= camera_y && dy <= camera_y + win_h)
+                                            {
+                                                visible_diamonds.push_back(dm);
+                                            }
                                         }
                                     }
                                 }
                             }
-                        }
 
-                        if (!visible_diamonds.empty())
-                        {
-                            int rand_idx = std::rand() % visible_diamonds.size();
-                            revealed_diamond = visible_diamonds[rand_idx];
-                        }
-                        else if (!all_non_digged_diamonds.empty() && m_player)
-                        {
-                            // Find the nearest one to the player
-                            diamond* nearest = nullptr;
-                            float min_dist_sq = -1.0f;
-                            for (auto* dm : all_non_digged_diamonds)
+                            if (!visible_diamonds.empty())
                             {
-                                float diff_x = dm->get_x() - curr_px;
-                                float diff_y = dm->get_y() - curr_py;
-                                float dist_sq = diff_x * diff_x + diff_y * diff_y;
-                                if (min_dist_sq < 0.0f || dist_sq < min_dist_sq)
-                                {
-                                    min_dist_sq = dist_sq;
-                                    nearest = dm;
-                                }
+                                int rand_idx = std::rand() % visible_diamonds.size();
+                                revealed_diamond = visible_diamonds[rand_idx];
                             }
-                            revealed_diamond = nearest;
+                            else if (!all_non_digged_diamonds.empty() && m_player)
+                            {
+                                // Find the nearest one to the player
+                                diamond* nearest = nullptr;
+                                float min_dist_sq = -1.0f;
+                                for (auto* dm : all_non_digged_diamonds)
+                                {
+                                    float diff_x = dm->get_x() - curr_px;
+                                    float diff_y = dm->get_y() - curr_py;
+                                    float dist_sq = diff_x * diff_x + diff_y * diff_y;
+                                    if (min_dist_sq < 0.0f || dist_sq < min_dist_sq)
+                                    {
+                                        min_dist_sq = dist_sq;
+                                        nearest = dm;
+                                    }
+                                }
+                                revealed_diamond = nearest;
+                            }
                         }
-                    }
 
-                    if (revealed_diamond)
-                    {
-                        revealed_diamond->set_permanently_revealed(true);
+                        if (revealed_diamond)
+                        {
+                            revealed_diamond->set_permanently_revealed(true);
+                        }
                     }
 
                     if (m_player)
@@ -1344,12 +1440,17 @@ namespace digx
         int min_y = sgy;
         int max_y = sgy;
 
-        if (radius == 1) // Grey 2x2 (centered/downward explosion to clear tiles below)
+        if (radius == 0) // Low tier stone: only current tile
         {
-            min_x = sgx - 1; max_x = sgx + 1;
-            min_y = sgy;     max_y = sgy + 1;
+            min_x = sgx; max_x = sgx;
+            min_y = sgy; max_y = sgy;
         }
-        else if (radius == 2) // Black 3x3
+        else if (radius == 1) // Mid tier stone: current tile and 1 below
+        {
+            min_x = sgx; max_x = sgx;
+            min_y = sgy; max_y = sgy + 1;
+        }
+        else if (radius >= 2) // High tier stone: 3x3 area
         {
             min_x = sgx - 1; max_x = sgx + 1;
             min_y = sgy;     max_y = sgy + 2;
@@ -1494,7 +1595,8 @@ namespace digx
             // Add breaking textures if the player is actively digging
             if (m_player->is_digging())
             {
-                int max_ticks = m_player->has_pickaxe() ? 48 : 96;
+                int max_ticks = m_player->has_pickaxe() ? m_player->get_pickaxe_dig_ticks() : m_player->get_shovel_dig_ticks();
+                if (max_ticks <= 0) max_ticks = 1;
                 int ticks_left = m_player->get_digging_ticks_remaining();
                 float progress = 1.0f - (static_cast<float>(ticks_left) / static_cast<float>(max_ticks));
                 
@@ -2223,10 +2325,18 @@ namespace digx
                 s->set_grid_position(gx, gy);
                 add_entity(std::move(s));
             }
-            else if (be.type_id == static_cast<uint32_t>(entity_type::diamond)) // Diamond
+            else if (be.type_id == static_cast<uint32_t>(entity_type::diamond)) // Revealed Diamond (on level start)
             {
                 auto d = std::make_unique<diamond>(next_stone_id++);
                 d->set_grid_position(gx, gy);
+                d->set_permanently_revealed(true);
+                add_entity(std::move(d));
+            }
+            else if (be.type_id == static_cast<uint32_t>(entity_type::diamond_hidden)) // Hidden Diamond (Star icon in Tiled)
+            {
+                auto d = std::make_unique<diamond>(next_stone_id++);
+                d->set_grid_position(gx, gy);
+                d->set_permanently_revealed(false);
                 add_entity(std::move(d));
             }
             else if (be.type_id == static_cast<uint32_t>(entity_type::gold_coin)) // Gold Coin
@@ -2236,10 +2346,18 @@ namespace digx
                 add_entity(std::move(c));
                 m_target_gold++;
             }
-            else if (be.type_id == static_cast<uint32_t>(entity_type::lamp)) // Lamp
+            else if (be.type_id == static_cast<uint32_t>(entity_type::lamp)) // Single Diamond Lamp
             {
                 auto l = std::make_unique<lamp>(next_stone_id++);
                 l->set_grid_position(gx, gy);
+                l->set_reveals_all_diamonds(false);
+                add_entity(std::move(l));
+            }
+            else if (be.type_id == static_cast<uint32_t>(entity_type::lamp_all)) // All Diamonds Lamp
+            {
+                auto l = std::make_unique<lamp>(next_stone_id++);
+                l->set_grid_position(gx, gy);
+                l->set_reveals_all_diamonds(true);
                 add_entity(std::move(l));
             }
             else if (be.type_id == static_cast<uint32_t>(entity_type::garlic)) // Garlic

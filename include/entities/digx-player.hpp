@@ -39,6 +39,17 @@ namespace digx
         int get_garlic_count() const;
         int get_onion_count() const;
         bool has_pickaxe() const;
+        void set_has_pickaxe(bool pickaxe) { m_has_pickaxe = pickaxe; }
+        
+        void set_shovel_dig_ticks(int ticks) { m_shovel_dig_ticks = ticks; }
+        int get_shovel_dig_ticks() const { return m_shovel_dig_ticks; }
+        
+        void set_pickaxe_dig_ticks(int ticks) { m_pickaxe_dig_ticks = ticks; }
+        int get_pickaxe_dig_ticks() const { return m_pickaxe_dig_ticks; }
+
+        void set_tunnel_speed(float speed) { m_tunnel_speed = speed; set_speed(speed); }
+        float get_tunnel_speed() const { return m_tunnel_speed; }
+
         int get_score() const;
 
         float get_fart_active_time() const;
@@ -53,8 +64,6 @@ namespace digx
         float get_target_x() const { return m_target_x; }
         float get_target_y() const { return m_target_y; }
         bool is_facing_left() const { return m_facing_left; }
-        
-
 
     private:
         zwodee::tile_level* m_level = nullptr;
@@ -66,6 +75,8 @@ namespace digx
         int m_score = 0;
 
         float m_tunnel_speed = 1.0f;
+        int m_shovel_dig_ticks = shovel_digging_ticks;
+        int m_pickaxe_dig_ticks = pickaxe_digging_ticks;
         bool m_is_digging = false;
         int m_digging_ticks_remaining = 0;
 

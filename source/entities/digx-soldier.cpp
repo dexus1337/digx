@@ -19,6 +19,7 @@ namespace digx
         if (m_stun_ticks > 0)
         {
             m_stun_ticks--;
+            m_stun_anim_ticks++;
             m_vx = 0.0f;
             m_vy = 0.0f;
             m_is_moving = false;
@@ -69,15 +70,37 @@ namespace digx
         float dy = player->get_y() - m_y;
         float dist = std::sqrt(dx * dx + dy * dy);
 
-        // Check if player farted (garlic) and is in proximity (e.g. 96 pixels)
-        if (player->get_fart_active_time() > 0.0f && dist <= 96.0f)
+        bool fart_active = false;
+        float fart_x = 0.0f;
+        float fart_y = 0.0f;
+        if (auto* lvl = dynamic_cast<digx::level*>(player->get_level()))
         {
-            // Stunned!
-            m_stun_ticks = static_cast<int>(player->get_fart_active_time() * 128.0f);
-            m_vx = 0.0f;
-            m_vy = 0.0f;
-            m_is_moving = false;
-            return;
+            fart_active = lvl->is_fart_active();
+            fart_x = lvl->get_fart_x();
+            fart_y = lvl->get_fart_y();
+        }
+
+        // Reset m_fart_affected when the fart cloud finishes
+        if (!fart_active)
+        {
+            m_fart_affected = false;
+        }
+
+        // Check if fart cloud is active and soldier is in 1-tile proximity to the CLOUD
+        if (!m_fart_affected && fart_active)
+        {
+            float fdx = fart_x - m_x;
+            float fdy = fart_y - m_y;
+            if (std::abs(fdx) <= 32.1f && std::abs(fdy) <= 32.1f)
+            {
+                // Stunned for 2.5 seconds (320 ticks at 128Hz)
+                m_stun_ticks = 320;
+                m_fart_affected = true;
+                m_vx = 0.0f;
+                m_vy = 0.0f;
+                m_is_moving = false;
+                return;
+            }
         }
 
         // If not stunned, player takes damage on collision
@@ -96,6 +119,32 @@ namespace digx
 
         // Shared grid movement logic
         update_enemy_movement(player);
+    }
+
+    void soldier::render(zwodee::renderer& target_renderer, double alpha)
+    {
+        if (!m_texture) return;
+        float render_x = m_x + (m_vx * static_cast<float>(alpha));
+        float render_y = m_y + (m_vy * static_cast<float>(alpha));
+
+        if (m_stun_ticks > 0)
+        {
+            render_x += std::sin(static_cast<float>(m_stun_anim_ticks) * 0.375f) * 2.0f;
+        }
+
+        int frame_width = m_texture->get_width();
+        int frame_height = m_texture->get_height();
+        target_renderer.draw_sprite(*m_texture, 0, 0, frame_width, frame_height, render_x, render_y, m_width, m_height, m_flip_horizontal);
+    }
+
+    zwodee::render_node soldier::get_render_node() const
+    {
+        zwodee::render_node node = enemy_base::get_render_node();
+        if (m_stun_ticks > 0)
+        {
+            node.x += std::sin(static_cast<float>(m_stun_anim_ticks) * 0.375f) * 2.0f;
+        }
+        return node;
     }
 
     bool soldier::is_stunned() const

@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<tileset version="1.9" tiledversion="1.9.2" name="digx-tiles" tilewidth="32" tileheight="32" tilecount="17" columns="0">
+<tileset version="1.9" tiledversion="1.9.2" name="digx-tiles" tilewidth="32" tileheight="32" tilecount="19" columns="0">
  <grid orientation="orthogonal" width="1" height="1" />
  <tile id="0">
   <image width="32" height="32" source="dirt.png" />
@@ -31,7 +31,7 @@
  <tile id="9" type="stone">
   <image width="32" height="32" source="stone-high.png" />
  </tile>
-<tile id="10" type="diamond">
+ <tile id="10" type="diamond">
   <image width="32" height="32" source="diamond-blue.png" />
  </tile>
  <tile id="11" type="gold_coin">
@@ -51,5 +51,11 @@
  </tile>
  <tile id="16" type="exit_door">
   <image width="32" height="32" source="door-closed.png" />
+ </tile>
+ <tile id="17" type="diamond_hidden">
+  <image width="32" height="32" source="blink.png" />
+ </tile>
+ <tile id="18" type="lamp_all">
+  <image width="32" height="32" source="lamp.png" />
  </tile>
  </tileset>

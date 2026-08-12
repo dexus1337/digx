@@ -29,7 +29,9 @@ namespace digx
         garlic = 13,
         onion = 14,
         pickaxe = 15,
-        exit_door = 16
+        exit_door = 16,
+        diamond_hidden = 17,
+        lamp_all = 18
     };
 
     class player;
@@ -58,6 +60,9 @@ namespace digx
         void dig_tile(int gx, int gy);
         void explode_stone(class stone* st, int custom_radius = -1);
         void trigger_fart_effect(float x, float y);
+        bool is_fart_active() const { return m_fart_effect_ticks > 0; }
+        float get_fart_x() const { return m_fart_x; }
+        float get_fart_y() const { return m_fart_y; }
 
     private:
         player* m_player = nullptr;

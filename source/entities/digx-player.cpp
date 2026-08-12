@@ -246,15 +246,15 @@ namespace digx
 
                 if (m_has_pickaxe)
                 {
-                    if (m_digging_ticks_remaining == pickaxe_digging_ticks / 2 - 5)
+                    if (m_digging_ticks_remaining == m_pickaxe_dig_ticks / 2 - 5)
                     {
                         play_dig_sound(m_audio, true);
                     }
                 }
                 else
                 {
-                    if (m_digging_ticks_remaining == shovel_digging_ticks - 5 || 
-                        m_digging_ticks_remaining == shovel_digging_ticks / 2 - 5)
+                    if (m_digging_ticks_remaining == m_shovel_dig_ticks - 5 || 
+                        m_digging_ticks_remaining == m_shovel_dig_ticks / 2 - 5)
                     {
                         play_dig_sound(m_audio, false);
                     }
@@ -325,7 +325,7 @@ namespace digx
                             if (target_undigged)
                             {
                                 m_is_digging = true;
-                                m_digging_ticks_remaining = m_has_pickaxe ? pickaxe_digging_ticks : shovel_digging_ticks;
+                                m_digging_ticks_remaining = m_has_pickaxe ? m_pickaxe_dig_ticks : m_shovel_dig_ticks;
                             }
                             else
                             {
@@ -368,7 +368,7 @@ namespace digx
                             if (target_undigged)
                             {
                                 m_is_digging = true;
-                                m_digging_ticks_remaining = m_has_pickaxe ? pickaxe_digging_ticks : shovel_digging_ticks;
+                                m_digging_ticks_remaining = m_has_pickaxe ? m_pickaxe_dig_ticks : m_shovel_dig_ticks;
                             }
                             else
                             {
@@ -451,7 +451,7 @@ namespace digx
                     if (target_undigged)
                     {
                         m_is_digging = true;
-                        m_digging_ticks_remaining = m_has_pickaxe ? pickaxe_digging_ticks : shovel_digging_ticks;
+                        m_digging_ticks_remaining = m_has_pickaxe ? m_pickaxe_dig_ticks : m_shovel_dig_ticks;
                     }
                     else
                     {

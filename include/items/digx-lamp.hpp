@@ -22,7 +22,11 @@ namespace digx
         void set_target_diamond(class diamond* target);
         class diamond* get_target_diamond() const;
 
+        void set_reveals_all_diamonds(bool reveals_all) { m_reveals_all = reveals_all; }
+        bool reveals_all_diamonds() const { return m_reveals_all; }
+
     private:
         class diamond* m_target_diamond = nullptr;
+        bool m_reveals_all = false;
     };
 }
