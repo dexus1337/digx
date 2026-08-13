@@ -10,13 +10,14 @@
 
 #include "zwodee.hpp"
 #include <array>
+#include <unordered_map>
 
 namespace digx
 {
     enum class entity_type : uint32_t
     {
         player = 2,
-        mummy = 3,
+        mummy_spawner = 3,
         soldier = 4,
         vampire = 5,
         dragon = 6,
@@ -58,6 +59,7 @@ namespace digx
 
         bool is_tile_digged(int gx, int gy) const;
         void dig_tile(int gx, int gy);
+        void reveal_diamond_at(int gx, int gy);
         void explode_stone(class stone* st, int custom_radius = -1);
         void trigger_fart_effect(float x, float y);
         bool is_fart_active() const { return m_fart_effect_ticks > 0; }
@@ -91,6 +93,7 @@ namespace digx
             int gy = 0;
             bool triggered = false;
             int cooldown_ticks = 0;
+            bool has_spawned = false;
         };
         std::vector<spawn_trigger_tile> m_mummy_triggers;
         uint32_t m_next_dynamic_mummy_id = 5000;
@@ -112,6 +115,8 @@ namespace digx
         bool m_is_paused = false;
         bool m_in_settings = false;
         int m_pause_selected_index = 0;
+        int m_pause_ticks = 0;
+        int m_resume_ticks = -1;
         zwodee::input_state m_last_input{};
         zwodee::input_state m_current_input{};
         std::unique_ptr<zwodee::font> m_font;
@@ -141,6 +146,7 @@ namespace digx
             int garlic = 0;
             int onion = 0;
             bool has_pickaxe = false;
+            int lives = 1;
         };
 
         void set_persistent_state(const player_persistent_state& state);
@@ -150,5 +156,11 @@ namespace digx
     private:
         player_persistent_state m_persisted_state;
         bool m_has_persisted_state = false;
+        std::unordered_map<std::string, int32_t> m_map_properties;
+        
+        // Retry screen state
+        bool m_retry_screen = false;
+        std::vector<zwodee::button> m_retry_buttons;
+        int m_retry_selected_index = 0;
     };
 }

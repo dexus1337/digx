@@ -15,10 +15,35 @@ namespace digx
     class player : public zwodee::entity_player
     {
     public:
-        static constexpr int shovel_digging_ticks  = 90;
-        static constexpr int pickaxe_digging_ticks = 40;
+        static constexpr int shovel_digging_ticks  = 54;
+        static constexpr int pickaxe_digging_ticks = 32;
 
         player(uint32_t network_id, zwodee::audio_manager* audio);
+
+        int                    get_gold_count()              const { return m_gold_collected; }
+        int                    get_diamond_count()           const { return m_diamonds_collected; }
+        int                    get_garlic_count()            const { return m_garlic_count; }
+        int                    get_onion_count()             const { return m_onion_count; }
+        bool                   has_pickaxe()                 const { return m_has_pickaxe; }
+        int                    get_shovel_dig_ticks()        const { return m_shovel_dig_ticks; }
+        int                    get_pickaxe_dig_ticks()       const { return m_pickaxe_dig_ticks; }
+        float                  get_tunnel_speed()            const { return m_tunnel_speed; }
+        int                    get_score()                   const { return m_score; }
+        float                  get_fart_active_time()        const { return static_cast<float>(m_fart_cooldown) / 128.0f; }
+        zwodee::tile_level*    get_level()                   const { return m_level; }
+        zwodee::audio_manager* get_audio_manager()           const { return m_audio; }
+        bool                   is_digging()                  const { return m_is_digging; }
+        int                    get_digging_ticks_remaining() const { return m_digging_ticks_remaining; }
+        float                  get_target_x()                const { return m_target_x; }
+        float                  get_target_y()                const { return m_target_y; }
+        bool                   is_facing_left()              const { return m_facing_left; }
+
+        void                   set_has_pickaxe(bool pickaxe)       { m_has_pickaxe = pickaxe; }
+        void                   set_shovel_dig_ticks(int ticks)     { m_shovel_dig_ticks = ticks; }
+        void                   set_pickaxe_dig_ticks(int ticks)    { m_pickaxe_dig_ticks = ticks; }
+        void                   set_tunnel_speed(float speed)       { m_tunnel_speed = speed; set_speed(speed); }
+        void                   set_grid_bounds(int cols, int rows) { m_level_cols = cols; m_level_rows = rows; }
+        void                   set_level(zwodee::tile_level* lvl)  { m_level = lvl; }
 
         void tick() override;
 
@@ -33,36 +58,6 @@ namespace digx
         void respawn(float x, float y);
 
         void apply_persistent_state(int score, int diamonds, int garlic, int onion, bool pickaxe);
-
-        int get_gold_count() const;
-        int get_diamond_count() const;
-        int get_garlic_count() const;
-        int get_onion_count() const;
-        bool has_pickaxe() const;
-        void set_has_pickaxe(bool pickaxe) { m_has_pickaxe = pickaxe; }
-        
-        void set_shovel_dig_ticks(int ticks) { m_shovel_dig_ticks = ticks; }
-        int get_shovel_dig_ticks() const { return m_shovel_dig_ticks; }
-        
-        void set_pickaxe_dig_ticks(int ticks) { m_pickaxe_dig_ticks = ticks; }
-        int get_pickaxe_dig_ticks() const { return m_pickaxe_dig_ticks; }
-
-        void set_tunnel_speed(float speed) { m_tunnel_speed = speed; set_speed(speed); }
-        float get_tunnel_speed() const { return m_tunnel_speed; }
-
-        int get_score() const;
-
-        float get_fart_active_time() const;
-
-        void set_grid_bounds(int cols, int rows);
-        void set_level(zwodee::tile_level* lvl);
-        zwodee::tile_level* get_level() const;
-        zwodee::audio_manager* get_audio_manager() const;
-        bool is_digging() const { return m_is_digging; }
-        int get_digging_ticks_remaining() const { return m_digging_ticks_remaining; }
-        float get_target_x() const { return m_target_x; }
-        float get_target_y() const { return m_target_y; }
-        bool is_facing_left() const { return m_facing_left; }
 
     private:
         zwodee::tile_level* m_level = nullptr;

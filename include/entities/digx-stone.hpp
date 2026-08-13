@@ -30,20 +30,20 @@ namespace digx
 
         zwodee::render_node get_render_node() const override;
 
-        void push(float speed_x);
-
-        stone_color get_color() const;
         int get_explosion_radius() const;
-        bool is_falling() const;
-        bool is_moving() const;
-        int get_wiggle_ticks() const;
-        bool was_pushed() const;
-        
-        void set_falling(bool falling);
-        void start_wiggle();
         void start_move(float dx, float dy);
-        void stop_falling();
-        void clear_pushed();
+
+        inline stone_color            get_color()                   const { return m_color; }
+        inline bool                   is_falling()                  const { return m_is_falling; }
+        inline bool                   is_moving()                   const { return m_is_moving; }
+        inline int                    get_wiggle_ticks()            const { return m_wiggle_ticks; }
+        inline bool                   was_pushed()                  const { return m_was_pushed; }
+
+        inline void                   set_falling(bool falling)           { m_is_falling = falling; }
+        inline void                   start_wiggle()                      { m_wiggle_ticks = 128; }
+        inline void                   stop_falling()                      { m_is_falling = false; }
+        inline void                   clear_pushed()                      { m_was_pushed = false; }
+        inline void                   push(float speed_x)                 { m_vx = speed_x; }
 
     private:
         stone_color m_color = color_high;

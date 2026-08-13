@@ -68,11 +68,10 @@ namespace digx
                 m_onion_count--;
                 m_fart_cooldown = 32;
 
-                // Play a random fart sound from fart-1 to fart-5 and chew sound
+                // Play a random fart sound from fart-1 to fart-6
                 if (m_audio)
                 {
-                    m_audio->play_sound("onion_chew");
-                    int rand_idx = (std::rand() % 5) + 1;
+                    int rand_idx = (std::rand() % 6) + 1;
                     m_audio->play_sound("fart-" + std::to_string(rand_idx));
                 }
 
@@ -433,6 +432,12 @@ namespace digx
                     {
                         m_is_digging = true;
                         m_digging_ticks_remaining = m_has_pickaxe ? m_pickaxe_dig_ticks : m_shovel_dig_ticks;
+                        if (auto* digx_lvl = dynamic_cast<digx::level*>(m_level))
+                        {
+                            int tgx = static_cast<int>(std::round(m_target_x / 32.0f));
+                            int tgy = static_cast<int>(std::round(m_target_y / 32.0f));
+                            digx_lvl->reveal_diamond_at(tgx, tgy);
+                        }
                     }
                     else
                     {
@@ -602,40 +607,6 @@ namespace digx
         m_has_pickaxe = pickaxe;
     }
 
-    int player::get_gold_count() const
-    {
-        return m_gold_collected;
-    }
-
-    int player::get_diamond_count() const
-    {
-        return m_diamonds_collected;
-    }
-
-    int player::get_garlic_count() const
-    {
-        return m_garlic_count;
-    }
-
-    int player::get_onion_count() const
-    {
-        return m_onion_count;
-    }
-
-    bool player::has_pickaxe() const
-    {
-        return m_has_pickaxe;
-    }
-
-    int player::get_score() const
-    {
-        return m_score;
-    }
-
-    float player::get_fart_active_time() const
-    {
-        return static_cast<float>(m_fart_cooldown) / 128.0f;
-    }
 
     void player::respawn(float x, float y)
     {
@@ -650,26 +621,7 @@ namespace digx
         m_has_pickaxe = false;
     }
 
-    void player::set_grid_bounds(int cols, int rows)
-    {
-        m_level_cols = cols;
-        m_level_rows = rows;
-    }
 
-    void player::set_level(zwodee::tile_level* lvl)
-    {
-        m_level = lvl;
-    }
-
-    zwodee::tile_level* player::get_level() const
-    {
-        return m_level;
-    }
-    
-    zwodee::audio_manager* player::get_audio_manager() const
-    {
-        return m_audio;
-    }
 
     bool player::is_tile_blocked(float tx, float ty) const
     {

@@ -23,8 +23,8 @@ namespace digx
 
         void update_behavior(player* player);
 
-        bool is_spawned() const;
-        void trigger_spawn();
+        inline bool                   is_spawned()                  const { return m_is_spawned; }
+        inline void                   trigger_spawn()                     { m_is_spawned = true; }
 
     private:
         bool m_is_spawned = false;

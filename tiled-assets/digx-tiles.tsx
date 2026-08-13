@@ -10,7 +10,7 @@
  <tile id="2" type="player">
   <image width="32" height="32" source="goblin-idle-pickaxe.png" />
  </tile>
- <tile id="3" type="mummy">
+ <tile id="3" type="mummy_spawner">
   <image width="32" height="32" source="mummy-front.png" />
  </tile>
  <tile id="4" type="soldier">

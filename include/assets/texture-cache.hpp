@@ -64,6 +64,8 @@ namespace digx
 
         std::shared_ptr<zwodee::texture> bg_tex;
         std::shared_ptr<zwodee::texture> fallback_tex;
+        std::shared_ptr<zwodee::texture> logo_tex;
+        std::shared_ptr<zwodee::texture> goblin_head_tex;
 
         std::shared_ptr<zwodee::texture> vampire_sleeping_tex;
         std::shared_ptr<zwodee::texture> vampire_triggered_tex;

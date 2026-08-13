@@ -1,6 +1,7 @@
 #include "entities/digx-enemy-base.hpp"
 #include "entities/digx-player.hpp"
 #include "entities/digx-stone.hpp"
+#include "entities/digx-mummy.hpp"
 #include "levels/digx-level.hpp"
 #include <cmath>
 #include <queue>
@@ -22,6 +23,17 @@ namespace digx
         {
             m_vx = 0.0f;
             m_vy = 0.0f;
+            return;
+        }
+
+        if (m_stun_ticks > 0)
+        {
+            m_stun_ticks--;
+            m_stun_anim_ticks++;
+            m_vx = 0.0f;
+            m_vy = 0.0f;
+            m_is_moving = false;
+            zwodee::entity::tick();
             return;
         }
 
@@ -154,7 +166,9 @@ namespace digx
             return false;
         }
 
-        if (!lvl->is_tile_digged(tx, ty))
+        bool is_mummy = (dynamic_cast<const mummy*>(this) != nullptr);
+
+        if (!lvl->is_tile_digged(tx, ty) && !is_mummy)
         {
             return false;
         }
@@ -186,5 +200,65 @@ namespace digx
         }
 
         return true;
+    }
+
+    bool enemy_base::update_fart_stun(player* player)
+    {
+        bool fart_active = false;
+        float fart_x = 0.0f;
+        float fart_y = 0.0f;
+        if (auto* lvl = dynamic_cast<digx::level*>(player->get_level()))
+        {
+            fart_active = lvl->is_fart_active();
+            fart_x = lvl->get_fart_x();
+            fart_y = lvl->get_fart_y();
+        }
+
+        if (!fart_active)
+        {
+            m_fart_affected = false;
+        }
+
+        if (!m_fart_affected && fart_active)
+        {
+            float fdx = fart_x - m_x;
+            float fdy = fart_y - m_y;
+            if (std::abs(fdx) <= 32.1f && std::abs(fdy) <= 32.1f)
+            {
+                m_stun_ticks = 320;
+                m_fart_affected = true;
+                m_vx = 0.0f;
+                m_vy = 0.0f;
+                m_is_moving = false;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void enemy_base::render(zwodee::renderer& target_renderer, double alpha)
+    {
+        if (!m_texture) return;
+        float render_x = m_x + (m_vx * static_cast<float>(alpha));
+        float render_y = m_y + (m_vy * static_cast<float>(alpha));
+
+        if (m_stun_ticks > 0)
+        {
+            render_x += std::sin(static_cast<float>(m_stun_anim_ticks) * 0.375f) * 2.0f;
+        }
+
+        int frame_width = m_texture->get_width();
+        int frame_height = m_texture->get_height();
+        target_renderer.draw_sprite(*m_texture, 0, 0, frame_width, frame_height, render_x, render_y, m_width, m_height, m_flip_horizontal);
+    }
+
+    zwodee::render_node enemy_base::get_render_node() const
+    {
+        zwodee::render_node node = zwodee::entity::get_render_node();
+        if (m_stun_ticks > 0)
+        {
+            node.x += std::sin(static_cast<float>(m_stun_anim_ticks) * 0.375f) * 2.0f;
+        }
+        return node;
     }
 }

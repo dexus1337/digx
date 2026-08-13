@@ -16,12 +16,10 @@ namespace digx
     {
         auto& tc = texture_cache::get();
 
-        if (!m_is_spawned || is_dead())
+        if (!m_is_spawned || is_dead() || is_stunned())
         {
-            m_vx = 0.0f;
-            m_vy = 0.0f;
-            m_is_moving = false;
             set_texture(tc.mummy_front_tex.get());
+            enemy_base::tick();
             return;
         }
 
@@ -62,7 +60,16 @@ namespace digx
             return;
         }
 
-        // Check if player takes damage on collision
+        if (is_stunned())
+        {
+            return;
+        }
+
+        if (update_fart_stun(player))
+        {
+            return;
+        }
+
         float dx = player->get_x() - m_x;
         float dy = player->get_y() - m_y;
         float dist = std::sqrt(dx * dx + dy * dy);
@@ -72,17 +79,6 @@ namespace digx
             player->take_damage(25);
         }
 
-        // Shared grid movement logic
         update_enemy_movement(player);
-    }
-
-    bool mummy::is_spawned() const
-    {
-        return m_is_spawned;
-    }
-
-    void mummy::trigger_spawn()
-    {
-        m_is_spawned = true;
     }
 }

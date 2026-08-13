@@ -96,6 +96,8 @@ namespace digx
         player_dead_tex               = r.load_dds_texture("assets/textures/goblin-dead.dds");
         fart_tex                      = r.load_dds_texture("assets/textures/fart.dds");
         explosion_tex                 = r.load_dds_texture("assets/textures/explosion.dds");
+        logo_tex                      = r.load_dds_texture("assets/textures/mainmenu-text.dds");
+        goblin_head_tex               = r.load_dds_texture("assets/textures/goblin-head.dds");
         soldier_tex                   = r.load_dds_texture("assets/textures/soldier-front.dds");
         soldier_front_tex             = r.load_dds_texture("assets/textures/soldier-front.dds");
         soldier_back_tex              = r.load_dds_texture("assets/textures/soldier-back.dds");

@@ -26,8 +26,8 @@ namespace digx
         void render(zwodee::renderer& target_renderer, double alpha) override;
         zwodee::render_node get_render_node() const override;
 
-        bool is_active() const;
-        bool is_neutralized() const;
+        inline bool                   is_active()                   const { return m_is_active; }
+        inline bool                   is_neutralized()              const { return m_neutralized_ticks > 0; }
 
     private:
         bool m_is_active = false;

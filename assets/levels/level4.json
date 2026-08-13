@@ -211,6 +211,11 @@
  "orientation":"orthogonal",
  "properties":[
         {
+         "name":"add_lives",
+         "type":"int",
+         "value":1
+        }, 
+        {
          "name":"required_coins",
          "type":"int",
          "value":3

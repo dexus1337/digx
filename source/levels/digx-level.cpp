@@ -21,6 +21,7 @@
 #include <algorithm>
 #include <fstream>
 #include <string_view>
+#include <cstdio>
 
 namespace digx
 {
@@ -64,9 +65,16 @@ namespace digx
         // Toggle pause when escape key (action_2) is pressed
         if (m_current_input.is_down(zwodee::input_state::action_2) && !m_last_input.is_down(zwodee::input_state::action_2))
         {
-            m_is_paused = !m_is_paused;
-            m_in_settings = false;
-            m_pause_selected_index = 0;
+            if (m_is_paused) {
+                m_is_paused = false;
+                m_resume_ticks = 32;
+            } else if (m_resume_ticks < 0) {
+                m_is_paused = true;
+                m_in_settings = false;
+                m_pause_selected_index = 0;
+                m_pause_ticks = 0;
+                m_resume_ticks = -1;
+            }
         }
 
         if (!m_is_paused && m_level_finish_sequence_ticks < 0 && m_level_entry_fade_ticks <= 0)
@@ -82,6 +90,11 @@ namespace digx
     void level::tick()
     {
         if (!m_player) return;
+
+        if (!m_is_paused && m_resume_ticks >= 0)
+        {
+            m_resume_ticks--;
+        }
 
         // Process Developer Console Commands
         if (m_engine)
@@ -272,7 +285,14 @@ namespace digx
                 {
                     m_game_over = false;
                     m_death_sequence_ticks = -1;
+                    m_player = nullptr; // Ignore dead player's state
+                    m_persisted_state = player_persistent_state(); // Full wipe
+                    
+                    m_level_number = 1;
+                    m_level_name = "level1";
+                    
                     restart();
+                    save_game(1);
                 }
                 else if (m_game_over_selected_index == 1) // Main Menu
                 {
@@ -282,6 +302,89 @@ namespace digx
                 }
                 else if (m_game_over_selected_index == 2) // Exit
                 {
+                    m_engine->stop();
+                }
+            }
+            m_last_input = m_current_input;
+            return;
+        }
+
+        if (m_retry_screen)
+        {
+            float screen_w = static_cast<float>(m_engine->get_window().get_width());
+            float btn_w = 300.0f;
+            float btn_h = 50.0f;
+            float btn_x = (screen_w - btn_w) * 0.5f;
+
+            m_retry_buttons.clear();
+            m_retry_buttons.push_back(zwodee::button("Retry", btn_x, 260.0f, btn_w, btn_h));
+            m_retry_buttons.push_back(zwodee::button("Main Menu", btn_x, 330.0f, btn_w, btn_h));
+            m_retry_buttons.push_back(zwodee::button("Exit", btn_x, 400.0f, btn_w, btn_h));
+
+            // Mouse controls
+            float mx = 0.0f, my = 0.0f;
+            uint32_t mouse_buttons = SDL_GetMouseState(&mx, &my);
+            float scale = m_engine->get_window().get_scale_factor();
+            mx /= scale;
+            my /= scale;
+            bool is_left_down = (mouse_buttons & SDL_BUTTON_LMASK) != 0;
+
+            static bool was_left_down = false;
+            bool left_clicked = is_left_down && !was_left_down;
+            was_left_down = is_left_down;
+
+            static float prev_mx_over = -1.0f;
+            static float prev_my_over = -1.0f;
+            bool mouse_moved = (mx != prev_mx_over || my != prev_my_over);
+            prev_mx_over = mx;
+            prev_my_over = my;
+
+            bool hovered_any = false;
+            for (size_t i = 0; i < m_retry_buttons.size(); ++i)
+            {
+                if (m_retry_buttons[i].is_hovered(mx, my))
+                {
+                    if (mouse_moved) m_retry_selected_index = static_cast<int>(i);
+                    hovered_any = true;
+                    break;
+                }
+            }
+
+            // Keyboard navigation
+            if (m_current_input.is_down(zwodee::input_state::move_up) && !m_last_input.is_down(zwodee::input_state::move_up))
+            {
+                m_retry_selected_index = (m_retry_selected_index - 1 + static_cast<int>(m_retry_buttons.size())) % static_cast<int>(m_retry_buttons.size());
+            }
+            else if (m_current_input.is_down(zwodee::input_state::move_down) && !m_last_input.is_down(zwodee::input_state::move_down))
+            {
+                m_retry_selected_index = (m_retry_selected_index + 1) % static_cast<int>(m_retry_buttons.size());
+            }
+
+            // Trigger selected menu item
+            bool trigger_action = (m_current_input.is_down(zwodee::input_state::action_1) && !m_last_input.is_down(zwodee::input_state::action_1)) || (left_clicked && hovered_any);
+
+            if (trigger_action)
+            {
+                if (m_retry_selected_index == 0) // Retry
+                {
+                    m_persisted_state.lives--;
+                    save_game(m_level_number);
+                    m_retry_screen = false;
+                    m_death_sequence_ticks = -1;
+                    restart(); // Restart current level
+                }
+                else if (m_retry_selected_index == 1) // Main Menu
+                {
+                    m_persisted_state.lives--;
+                    save_game(m_level_number);
+                    m_retry_screen = false;
+                    m_death_sequence_ticks = -1;
+                    m_engine->get_level_manager().transition_to("main_menu");
+                }
+                else if (m_retry_selected_index == 2) // Exit
+                {
+                    m_persisted_state.lives--;
+                    save_game(m_level_number);
                     m_engine->stop();
                 }
             }
@@ -367,6 +470,8 @@ namespace digx
 
         if (m_is_paused)
         {
+            m_pause_ticks++;
+
             // Update layouts dynamically to fit current screen size
             float screen_w = static_cast<float>(m_engine->get_window().get_width());
             float btn_w = 300.0f;
@@ -376,10 +481,21 @@ namespace digx
             m_pause_buttons.clear();
             if (!m_in_settings)
             {
-                m_pause_buttons.push_back(zwodee::button("Resume", btn_x, 260.0f, btn_w, btn_h));
-                m_pause_buttons.push_back(zwodee::button("Settings", btn_x, 330.0f, btn_w, btn_h));
-                m_pause_buttons.push_back(zwodee::button("Back to Main Menu", btn_x, 400.0f, btn_w, btn_h));
-                m_pause_buttons.push_back(zwodee::button("Exit", btn_x, 470.0f, btn_w, btn_h));
+                float curr_y = 260.0f;
+                m_pause_buttons.push_back(zwodee::button("Resume", btn_x, curr_y, btn_w, btn_h));
+                curr_y += 70.0f;
+                
+                if (m_persisted_state.lives > 0)
+                {
+                    m_pause_buttons.push_back(zwodee::button("Restart Level", btn_x, curr_y, btn_w, btn_h));
+                    curr_y += 70.0f;
+                }
+
+                m_pause_buttons.push_back(zwodee::button("Settings", btn_x, curr_y, btn_w, btn_h));
+                curr_y += 70.0f;
+                m_pause_buttons.push_back(zwodee::button("Back to Main Menu", btn_x, curr_y, btn_w, btn_h));
+                curr_y += 70.0f;
+                m_pause_buttons.push_back(zwodee::button("Exit", btn_x, curr_y, btn_w, btn_h));
             }
             else
             {
@@ -457,26 +573,46 @@ namespace digx
 
                 if (trigger_action)
                 {
-                    if (m_pause_selected_index == 0) // Resume
+                    int btn_idx = m_pause_selected_index;
+                    
+                    if (btn_idx == 0) // Resume
                     {
                         m_is_paused = false;
+                        m_resume_ticks = 32;
                     }
-                    else if (m_pause_selected_index == 1) // Settings
+                    else
                     {
-                        m_in_settings = true;
-                        m_pause_selected_index = 0;
-                        m_volume_slider.reset_drag();
-                    }
-                    else if (m_pause_selected_index == 2) // Back to Main Menu
-                    {
-                        save_game();
-                        m_is_paused = false;
-                        m_engine->get_level_manager().transition_to("main_menu");
-                    }
-                    else if (m_pause_selected_index == 3) // Exit
-                    {
-                        save_game();
-                        m_engine->stop();
+                        if (m_persisted_state.lives > 0)
+                        {
+                            if (btn_idx == 1) // Restart Level
+                            {
+                                m_persisted_state.lives--;
+                                m_is_paused = false;
+                                m_resume_ticks = -1;
+                                restart();
+                                save_game(m_level_number);
+                                return;
+                            }
+                            btn_idx--;
+                        }
+
+                        if (btn_idx == 1) // Settings
+                        {
+                            m_in_settings = true;
+                            m_pause_selected_index = 0;
+                            m_volume_slider.reset_drag();
+                        }
+                        else if (btn_idx == 2) // Back to Main Menu
+                        {
+                            save_game();
+                            m_is_paused = false;
+                            m_engine->get_level_manager().transition_to("main_menu");
+                        }
+                        else if (btn_idx == 3) // Exit
+                        {
+                            save_game();
+                            m_engine->stop();
+                        }
                     }
                 }
             }
@@ -603,6 +739,11 @@ namespace digx
 
             for (auto& trigger : m_mummy_triggers)
             {
+                if (trigger.has_spawned)
+                {
+                    continue;
+                }
+
                 if (!trigger.triggered)
                 {
                     if (p_gx == trigger.gx && p_gy == trigger.gy)
@@ -626,8 +767,7 @@ namespace digx
                             m->trigger_spawn(); // Set spawned true
                             add_entity(std::move(m));
                             
-                            // Reset cooldown to 5 seconds
-                            trigger.cooldown_ticks = 640;
+                            trigger.has_spawned = true;
                         }
                     }
                     else
@@ -684,18 +824,32 @@ namespace digx
                     audio->play_sound("death");
                 }
                 m_player->set_texture(texture_cache::get().player_dead_tex.get() ? texture_cache::get().player_dead_tex.get() : texture_cache::get().fallback_tex.get());
-                m_death_sequence_ticks = 384; // 3 seconds at 128Hz
+                m_death_sequence_ticks = 230; // ~60% of 384 ticks
             }
             else if (m_death_sequence_ticks > 0)
             {
                 m_death_sequence_ticks--;
-                if (m_death_sequence_ticks == 0)
+
+                if (m_death_sequence_ticks == 230 - 32)
                 {
-                    m_game_over = true;
-                    m_game_over_selected_index = 0;
                     if (auto* audio = m_player->get_audio_manager())
                     {
                         audio->play_sound("gameover");
+                    }
+                }
+
+                if (m_death_sequence_ticks == 0)
+                {
+                    if (m_persisted_state.lives > 0)
+                    {
+                        m_retry_screen = true;
+                        m_retry_selected_index = 0;
+                    }
+                    else
+                    {
+                        m_game_over = true;
+                        m_game_over_selected_index = 0;
+                        std::remove("savegame.dat"); // Wipe the save so players can't resume after Game Over!
                     }
                 }
             }
@@ -1219,6 +1373,7 @@ namespace digx
             state.garlic = m_player->get_garlic_count();
             state.onion = m_player->get_onion_count();
             state.has_pickaxe = m_player->has_pickaxe();
+            state.lives = m_persisted_state.lives;
         }
         else
         {
@@ -1316,7 +1471,7 @@ namespace digx
         audio.load_sound("death", "assets/sounds/death.wav");
 
         // Load fart sounds
-        for (int i = 1; i <= 5; ++i)
+        for (int i = 1; i <= 6; ++i)
         {
             audio.load_sound("fart-" + std::to_string(i), "assets/sounds/fart-" + std::to_string(i) + ".wav");
         }
@@ -1357,6 +1512,7 @@ namespace digx
         m_fart_x = 0.0f;
         m_fart_y = 0.0f;
         m_active_explosions.clear();
+        m_mummy_triggers.clear();
 
         m_persisted_state.garlic = 0;
         m_persisted_state.onion = 0;
@@ -1407,16 +1563,20 @@ namespace digx
                 get_static_objects()[idx]->set_collidable(false);
             }
 
-            // Reveal any diamond at this location
-            for (const auto& ent : get_entities())
+            reveal_diamond_at(gx, gy);
+        }
+    }
+
+    void level::reveal_diamond_at(int gx, int gy)
+    {
+        for (const auto& ent : get_entities())
+        {
+            if (auto* dm = dynamic_cast<diamond*>(ent.get()))
             {
-                if (auto* dm = dynamic_cast<diamond*>(ent.get()))
+                if (std::abs(dm->get_x() - gx * 32.0f) < 8.0f &&
+                    std::abs(dm->get_y() - gy * 32.0f) < 8.0f)
                 {
-                    if (std::abs(dm->get_x() - gx * 32.0f) < 8.0f &&
-                        std::abs(dm->get_y() - gy * 32.0f) < 8.0f)
-                    {
-                        dm->set_permanently_revealed(true);
-                    }
+                    dm->set_permanently_revealed(true);
                 }
             }
         }
@@ -1774,7 +1934,7 @@ namespace digx
                     }
                     else if (m_death_sequence_ticks >= 0)
                     {
-                        fade = static_cast<float>(m_death_sequence_ticks) / 384.0f;
+                        fade = static_cast<float>(m_death_sequence_ticks) / 230.0f;
                     }
                     node.color_mod = static_cast<uint8_t>(fade * 255.0f);
                 }
@@ -1833,32 +1993,39 @@ namespace digx
             };
 
             // Calculate left elements content
-            float tx = 8.0f; // Padding from left edge of screen
+            float tx = 2.0f; // Reduced padding from left edge of screen
 
             // We can pre-calculate the positions and widths
             std::vector<hud_item> left_items;
             
             // Onion
-            left_items.push_back({texture_cache::get().onion_tex.get(), tx, icon_sz, ": " + std::to_string(m_player->get_onion_count()) + "    "});
-            tx += icon_sz + 4.0f;
+            left_items.push_back({texture_cache::get().onion_tex.get(), tx, icon_sz, " " + std::to_string(m_player->get_onion_count()) + " |"});
+            tx += icon_sz;
             float o_w = 0.0f;
             for (char c : left_items.back().text) o_w += m_font->get_glyph(c).xadvance * font_scale;
-            tx += o_w;
+            tx += o_w + 2.0f;
 
             // Garlic
-            left_items.push_back({texture_cache::get().garlic_tex.get(), tx, icon_sz, ": " + std::to_string(m_player->get_garlic_count()) + "    "});
-            tx += icon_sz + 4.0f;
+            left_items.push_back({texture_cache::get().garlic_tex.get(), tx, icon_sz, " " + std::to_string(m_player->get_garlic_count()) + " |"});
+            tx += icon_sz;
             float g_w = 0.0f;
             for (char c : left_items.back().text) g_w += m_font->get_glyph(c).xadvance * font_scale;
-            tx += g_w;
+            tx += g_w + 2.0f;
 
             // Coin
             int coins_left = std::max(0, m_target_gold - m_player->get_gold_count());
-            left_items.push_back({texture_cache::get().coin_tex.get(), tx, icon_sz, ": " + std::to_string(coins_left)});
-            tx += icon_sz + 4.0f;
+            left_items.push_back({texture_cache::get().coin_tex.get(), tx, icon_sz, " " + std::to_string(coins_left) + " |"});
+            tx += icon_sz;
             float c_w = 0.0f;
             for (char c : left_items.back().text) c_w += m_font->get_glyph(c).xadvance * font_scale;
-            tx += c_w;
+            tx += c_w + 2.0f;
+
+            // Lives
+            left_items.push_back({texture_cache::get().goblin_head_tex.get(), tx, icon_sz, " " + std::to_string(m_persisted_state.lives)});
+            tx += icon_sz;
+            float l_w = 0.0f;
+            for (char c : left_items.back().text) l_w += m_font->get_glyph(c).xadvance * font_scale;
+            tx += l_w;
 
             float left_panel_w = tx + 8.0f; // Padding at end of left panel
 
@@ -1873,27 +2040,58 @@ namespace digx
             float right_panel_x = screen_w - right_panel_w;
             float right_text_x = right_panel_x + 8.0f;
 
+            auto draw_rounded_bg = [&](float px, float py, float pw, float ph, bool round_bl, bool round_br) {
+                float r = 12.0f; // Original nice radius
+                float step = 0.05f; // Extremely high precision (20 elements per virtual unit) for 4K smoothness!
+                
+                // Top main block
+                zwodee::render_node bg{};
+                bg.tex = nullptr;
+                bg.is_ui = true;
+                bg.r = 0; bg.g = 0; bg.b = 0; bg.a = 128;
+                
+                bg.x = px;
+                bg.y = py;
+                bg.w = pw;
+                bg.h = ph - r;
+                snapshot.push_back(bg);
+
+                // Bottom rounded corners (drawn strip by sub-pixel strip)
+                for (float dy_offset = 0.0f; dy_offset < r; dy_offset += step)
+                {
+                    // Correct orientation: dy starts near 0 at the top of the curve, and grows to r at the bottom
+                    float dy = dy_offset + (step * 0.5f); 
+                    if (dy >= r) dy = r - 0.001f;
+                    
+                    float dx = std::sqrt(r * r - dy * dy);
+                    
+                    float strip_x = px;
+                    float strip_w = pw;
+                    
+                    if (round_bl)
+                    {
+                        strip_x += (r - dx);
+                        strip_w -= (r - dx);
+                    }
+                    if (round_br)
+                    {
+                        strip_w -= (r - dx);
+                    }
+                    
+                    bg.x = strip_x;
+                    bg.y = py + ph - r + dy_offset;
+                    bg.w = strip_w;
+                    bg.h = step; // Exact abutment for top-left rule rasterization (no overlap darkening)
+                    
+                    snapshot.push_back(bg);
+                }
+            };
+
             // 1. Draw Left Panel Background Node (flush with left edge, x=0)
-            zwodee::render_node bg_left{};
-            bg_left.x = 0.0f;
-            bg_left.y = bg_y;
-            bg_left.w = left_panel_w;
-            bg_left.h = bg_h;
-            bg_left.tex = nullptr;
-            bg_left.is_ui = true;
-            bg_left.r = 0; bg_left.g = 0; bg_left.b = 0; bg_left.a = 128; // 50% opacity
-            snapshot.push_back(bg_left);
+            draw_rounded_bg(0.0f, bg_y, left_panel_w, bg_h, false, true);
 
             // 2. Draw Right Panel Background Node (flush with right edge)
-            zwodee::render_node bg_right{};
-            bg_right.x = right_panel_x;
-            bg_right.y = bg_y;
-            bg_right.w = right_panel_w;
-            bg_right.h = bg_h;
-            bg_right.tex = nullptr;
-            bg_right.is_ui = true;
-            bg_right.r = 0; bg_right.g = 0; bg_right.b = 0; bg_right.a = 128; // 50% opacity
-            snapshot.push_back(bg_right);
+            draw_rounded_bg(right_panel_x, bg_y, right_panel_w, bg_h, true, false);
 
             // Helpers to draw icon and text
             auto draw_hud_icon = [&](const zwodee::texture* tex, float x) {
@@ -1931,7 +2129,7 @@ namespace digx
             for (const auto& item : left_items)
             {
                 draw_hud_icon(item.tex, item.x);
-                draw_shadow_text(item.text, item.x + icon_sz + 4.0f);
+                draw_shadow_text(item.text, item.x + icon_sz);
             }
 
             // 4. Draw Right Panel Content
@@ -1978,6 +2176,52 @@ namespace digx
                 for (size_t i = 0; i < m_game_over_buttons.size(); ++i)
                 {
                     m_game_over_buttons[i].add_to_snapshot(snapshot, *m_font, m_game_over_selected_index == static_cast<int>(i));
+                }
+            }
+        }
+
+        // Append Retry Menu overlay
+        if (m_retry_screen)
+        {
+            float screen_w = static_cast<float>(display_w);
+            float screen_h = static_cast<float>(display_h);
+
+            // 1. Semi-transparent black overlay
+            zwodee::render_node overlay_node{};
+            overlay_node.x = 0.0f;
+            overlay_node.y = 0.0f;
+            overlay_node.w = screen_w;
+            overlay_node.h = screen_h;
+            overlay_node.tex = nullptr;
+            overlay_node.is_ui = true;
+            overlay_node.is_blur = true;
+            overlay_node.r = 0; overlay_node.g = 0; overlay_node.b = 0; overlay_node.a = 160;
+            snapshot.push_back(overlay_node);
+
+            if (m_font)
+            {
+                std::string retry_text = "YOU DIED";
+                float text_scale = 0.8f;
+                float text_w = 0.0f;
+                for (char c : retry_text) text_w += m_font->get_glyph(c).xadvance * text_scale;
+                float tx = (screen_w - text_w) * 0.5f;
+                std::vector<zwodee::render_node> text_nodes = m_font->get_text_nodes(retry_text, tx, 100.0f, text_scale, 255, 100, 100, 255);
+                for (auto& node : text_nodes) node.is_ui = true;
+                snapshot.insert(snapshot.end(), text_nodes.begin(), text_nodes.end());
+
+                std::string lives_text = "You have " + std::to_string(m_persisted_state.lives) + " more tries for this Level.";
+                float lives_scale = 0.4f;
+                float lives_w = 0.0f;
+                for (char c : lives_text) lives_w += m_font->get_glyph(c).xadvance * lives_scale;
+                float lx = (screen_w - lives_w) * 0.5f;
+                std::vector<zwodee::render_node> lives_nodes = m_font->get_text_nodes(lives_text, lx, 180.0f, lives_scale, 200, 200, 200, 255);
+                for (auto& node : lives_nodes) node.is_ui = true;
+                snapshot.insert(snapshot.end(), lives_nodes.begin(), lives_nodes.end());
+
+                // 3. Render Buttons
+                for (size_t i = 0; i < m_retry_buttons.size(); ++i)
+                {
+                    m_retry_buttons[i].add_to_snapshot(snapshot, *m_font, m_retry_selected_index == static_cast<int>(i));
                 }
             }
         }
@@ -2034,10 +2278,20 @@ namespace digx
         }
 
         // Append Pause Menu overlay and buttons at the end of snapshot (renders on top, no camera offset)
-        if (m_is_paused)
+        if (m_is_paused || m_resume_ticks >= 0)
         {
             float screen_w = static_cast<float>(display_w);
             float screen_h = static_cast<float>(display_h);
+            
+            float anim_progress;
+            float ease;
+            if (m_is_paused) {
+                anim_progress = std::min(1.0f, static_cast<float>(m_pause_ticks) / 32.0f);
+                ease = 1.0f - (1.0f - anim_progress) * (1.0f - anim_progress); // Ease-out
+            } else {
+                anim_progress = std::max(0.0f, static_cast<float>(m_resume_ticks) / 32.0f);
+                ease = anim_progress * anim_progress; // Ease-in (going up)
+            }
 
             // 1. Semi-transparent black overlay with blur effect
             zwodee::render_node overlay_node{};
@@ -2048,11 +2302,37 @@ namespace digx
             overlay_node.tex = nullptr;
             overlay_node.is_ui = true;
             overlay_node.is_blur = true;
-            overlay_node.r = 0; overlay_node.g = 0; overlay_node.b = 0; overlay_node.a = 128; // 50% dark overlay
+            overlay_node.r = 0; overlay_node.g = 0; overlay_node.b = 0; 
+            overlay_node.a = static_cast<uint8_t>(128 * anim_progress); // Fade overlay
             snapshot.push_back(overlay_node);
 
-            // 2. "PAUSED" Title Text
-            if (m_font)
+            // 2. Animated Title Logo
+            if (auto logo_tex = texture_cache::get().logo_tex)
+            {
+                float logo_w = static_cast<float>(logo_tex->get_width());
+                float logo_h = static_cast<float>(logo_tex->get_height());
+                float target_logo_w = screen_w * 0.5f;
+                float target_logo_h = logo_h * (target_logo_w / logo_w);
+                
+                float lx = (screen_w - target_logo_w) * 0.5f;
+                float ly_start = -target_logo_h;
+                float ly_end = 0.0f;
+                float ly = ly_start + (ly_end - ly_start) * ease;
+                
+                zwodee::render_node logo_node;
+                logo_node.tex = logo_tex.get();
+                logo_node.src_x = 0;
+                logo_node.src_y = 0;
+                logo_node.src_w = static_cast<int>(logo_w);
+                logo_node.src_h = static_cast<int>(logo_h);
+                logo_node.x = lx;
+                logo_node.y = ly;
+                logo_node.w = target_logo_w;
+                logo_node.h = target_logo_h;
+                logo_node.is_ui = true;
+                snapshot.push_back(logo_node);
+            }
+            else if (m_font)
             {
                 std::string paused_text = "PAUSED";
                 float text_scale = 0.8f; // ~57px size
@@ -2068,6 +2348,10 @@ namespace digx
                     node.is_ui = true;
                 }
                 snapshot.insert(snapshot.end(), text_nodes.begin(), text_nodes.end());
+            }
+
+            if (m_font)
+            {
 
                 // 2b. Optional "Settings" Subtitle
                 if (m_in_settings)
@@ -2089,16 +2373,18 @@ namespace digx
                 }
 
                 // 3. Render Buttons / UI
-                if (!m_in_settings)
+                if (m_is_paused)
                 {
-                    for (size_t i = 0; i < m_pause_buttons.size(); ++i)
+                    if (!m_in_settings)
                     {
-                        m_pause_buttons[i].add_to_snapshot(snapshot, *m_font, m_pause_selected_index == static_cast<int>(i));
+                        for (size_t i = 0; i < m_pause_buttons.size(); ++i)
+                        {
+                            m_pause_buttons[i].add_to_snapshot(snapshot, *m_font, m_pause_selected_index == static_cast<int>(i));
+                        }
                     }
-                }
-                else
-                {
-                    // Sound Switch (Index 0)
+                    else
+                    {
+                        // Sound Switch (Index 0)
                     m_sound_switch.add_to_snapshot(snapshot, *m_font, m_pause_selected_index == 0);
 
                     // Volume Slider (Index 1)
@@ -2121,6 +2407,7 @@ namespace digx
                     // Back Button (Index 3)
                     m_pause_buttons[1].add_to_snapshot(snapshot, *m_font, m_pause_selected_index == 3);
                 }
+                } // End if (m_is_paused)
             }
         }
 
@@ -2216,6 +2503,23 @@ namespace digx
 
         resize(header.width, header.height);
         
+        // Read properties
+        m_map_properties.clear();
+        for (uint32_t i = 0; i < header.property_count; ++i)
+        {
+            zwodee::binary_property bp;
+            if (!in.read(reinterpret_cast<char*>(&bp), sizeof(bp))) break;
+            
+            // Find length up to null terminator within 32 chars
+            size_t len = 0;
+            while (len < sizeof(bp.name) && bp.name[len] != '\0') len++;
+            std::string name(bp.name, len);
+            
+            m_map_properties[name] = bp.value;
+        }
+
+
+        
         // Read tiles
         for (uint32_t i = 0; i < header.tile_count; ++i)
         {
@@ -2291,12 +2595,9 @@ namespace digx
 
                 add_entity(std::move(goblin));
             }
-            else if (be.type_id == static_cast<uint32_t>(entity_type::mummy)) // Mummy
+            else if (be.type_id == static_cast<uint32_t>(entity_type::mummy_spawner)) // Mummy Spawner
             {
-                auto m = std::make_unique<mummy>(m_next_dynamic_mummy_id++);
-                m->set_grid_position(gx, gy);
-                m->trigger_spawn(); 
-                add_entity(std::move(m));
+                m_mummy_triggers.push_back({gx, gy, false, 0, false});
             }
             else if (be.type_id == static_cast<uint32_t>(entity_type::soldier)) // Soldier
             {
@@ -2389,12 +2690,23 @@ namespace digx
                 m_exit_x = static_cast<float>(gx * 32);
                 m_exit_y = static_cast<float>(gy * 32);
                 add_entity(std::move(door));
+                
+                // Auto-dig the tile where the door is placed
+                size_t idx = static_cast<size_t>(gy) * get_width() + static_cast<size_t>(gx);
+                if (idx < get_static_objects().size())
+                {
+                    set_tile(gx, gy, 1, 0, texture_cache::get().digged_tex.get());
+                    if (get_static_objects()[idx])
+                    {
+                        get_static_objects()[idx]->set_collidable(false);
+                    }
+                }
             }
         }
 
-        if (header.target_score != -1)
+        if (m_map_properties.count("required_coins"))
         {
-            m_target_gold = header.target_score;
+            m_target_gold = m_map_properties["required_coins"];
         }
     }
 
@@ -2418,6 +2730,12 @@ namespace digx
 
     void level::advance_to_next_level()
     {
+        // Apply level completion rewards
+        if (m_map_properties.count("add_lives"))
+        {
+            m_persisted_state.lives += m_map_properties["add_lives"];
+        }
+
         int next_level = m_level_number + 1;
         std::string next_file = "assets/levels/level" + std::to_string(next_level) + ".zwl";
         
@@ -2437,6 +2755,7 @@ namespace digx
                 state.garlic = m_player->get_garlic_count();
                 state.onion = m_player->get_onion_count();
                 state.has_pickaxe = false; // Pickaxe does not carry over to the next level
+                state.lives = m_persisted_state.lives;
             }
             new_level->set_persistent_state(state);
             

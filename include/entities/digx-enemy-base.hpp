@@ -13,12 +13,21 @@ namespace digx
         ~enemy_base() override = default;
 
         void tick() override;
+        void render(zwodee::renderer& target_renderer, double alpha) override;
+        zwodee::render_node get_render_node() const override;
 
         // Shared AI movement tick
         void update_enemy_movement(player* player);
+        
+        bool update_fart_stun(player* player);
+
+        inline bool is_stunned() const { return m_stun_ticks > 0; }
 
     protected:
         float m_speed = 0.4f;
+        int m_stun_ticks = 0;
+        int m_stun_anim_ticks = 0;
+        bool m_fart_affected = false;
         
         // Grid target coordinates
         float m_target_x = 0.0f;

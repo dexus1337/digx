@@ -15,6 +15,7 @@ namespace digx
     {
         // Load the TTF font from our assets folder at 72px for high resolution
         m_font = std::make_unique<zwodee::font>(m_engine.get_renderer(), "assets/fonts/Roboto-Medium.ttf", 72.0f);
+        m_logo_tex = m_engine.get_renderer().load_dds_texture("assets/textures/mainmenu-text.dds");
 
         // Sync sound state and initialize button layouts
         m_sound_enabled = !m_engine.get_audio_manager().is_muted();
@@ -271,13 +272,34 @@ namespace digx
         float screen_w = static_cast<float>(display_w);
         zwodee::render_snapshot snapshot;
 
-        // Render Title Text "DIG X" centered
-        std::string title = "DIG X";
-        float title_scale = 1.0f; // 72px base size
-        
-        float title_w = 0.0f;
-        if (m_font)
+        // Render Title Logo centered at the top
+        if (m_logo_tex)
         {
+            float logo_w = static_cast<float>(m_logo_tex->get_width());
+            float logo_h = static_cast<float>(m_logo_tex->get_height());
+            float target_logo_w = screen_w * 0.5f;
+            float target_logo_h = logo_h * (target_logo_w / logo_w);
+            float lx = (screen_w - target_logo_w) * 0.5f;
+            float ly = 0.0f; // No gap on top
+            
+            zwodee::render_node logo_node;
+            logo_node.tex = m_logo_tex.get();
+            logo_node.src_x = 0;
+            logo_node.src_y = 0;
+            logo_node.src_w = static_cast<int>(logo_w);
+            logo_node.src_h = static_cast<int>(logo_h);
+            logo_node.x = lx;
+            logo_node.y = ly;
+            logo_node.w = target_logo_w;
+            logo_node.h = target_logo_h;
+            logo_node.is_ui = true;
+            snapshot.push_back(logo_node);
+        }
+        else if (m_font)
+        {
+            std::string title = "DIG X";
+            float title_scale = 1.0f; // 72px base size
+            float title_w = 0.0f;
             for (char c : title)
             {
                 title_w += m_font->get_glyph(c).xadvance * title_scale;
@@ -289,22 +311,11 @@ namespace digx
                 node.is_ui = true;
             }
             snapshot.insert(snapshot.end(), title_nodes.begin(), title_nodes.end());
+        }
 
-            // Render Sub-Title
-            std::string subtitle = m_in_settings ? "Settings" : "Main Menu";
-            float sub_scale = 0.45f;
-            float sub_w = 0.0f;
-            for (char c : subtitle)
-            {
-                sub_w += m_font->get_glyph(c).xadvance * sub_scale;
-            }
-            float sx = (screen_w - sub_w) * 0.5f;
-            std::vector<zwodee::render_node> sub_nodes = m_font->get_text_nodes(subtitle, sx, 170.0f, sub_scale, 180, 180, 220, 255);
-            for (auto& node : sub_nodes)
-            {
-                node.is_ui = true;
-            }
-            snapshot.insert(snapshot.end(), sub_nodes.begin(), sub_nodes.end());
+        if (m_font)
+        {
+
 
             // Render Buttons / UI
             if (!m_in_settings)

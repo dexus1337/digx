@@ -124,13 +124,5 @@ namespace digx
         return zwodee::render_node{ rx, m_y, m_width, m_height, m_texture, 0, 0, frame_width, frame_height };
     }
 
-    bool vampire::is_active() const
-    {
-        return m_is_active;
-    }
 
-    bool vampire::is_neutralized() const
-    {
-        return m_neutralized_ticks > 0;
-    }
 }

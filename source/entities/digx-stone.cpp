@@ -108,15 +108,7 @@ namespace digx
         return zwodee::render_node{ rx, m_y, m_width, m_height, m_texture, 0, 0, frame_width, frame_height };
     }
 
-    void stone::push(float speed_x)
-    {
-        m_vx = speed_x;
-    }
 
-    stone::stone_color stone::get_color() const
-    {
-        return m_color;
-    }
 
     int stone::get_explosion_radius() const
     {
@@ -131,35 +123,7 @@ namespace digx
         return 0;
     }
 
-    bool stone::is_falling() const
-    {
-        return m_is_falling;
-    }
 
-    bool stone::is_moving() const
-    {
-        return m_is_moving;
-    }
-
-    int stone::get_wiggle_ticks() const
-    {
-        return m_wiggle_ticks;
-    }
-
-    bool stone::was_pushed() const
-    {
-        return m_was_pushed;
-    }
-
-    void stone::set_falling(bool falling)
-    {
-        m_is_falling = falling;
-    }
-
-    void stone::start_wiggle()
-    {
-        m_wiggle_ticks = 128;
-    }
 
     void stone::start_move(float dx, float dy)
     {
@@ -174,13 +138,5 @@ namespace digx
         }
     }
 
-    void stone::stop_falling()
-    {
-        m_is_falling = false;
-    }
 
-    void stone::clear_pushed()
-    {
-        m_was_pushed = false;
-    }
 }
