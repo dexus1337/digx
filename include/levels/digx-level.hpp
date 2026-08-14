@@ -119,7 +119,7 @@ namespace digx
         int m_resume_ticks = -1;
         zwodee::input_state m_last_input{};
         zwodee::input_state m_current_input{};
-        std::unique_ptr<zwodee::font> m_font;
+        std::shared_ptr<zwodee::font> m_font;
         std::vector<zwodee::button> m_pause_buttons;
         zwodee::toggle_switch m_sound_switch;
         zwodee::slider m_volume_slider;

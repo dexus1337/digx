@@ -1445,7 +1445,12 @@ namespace digx
     {
         m_level_name = level_name;
         m_engine = &engine;
-        m_font = std::make_unique<zwodee::font>(engine.get_renderer(), "assets/fonts/Roboto-Medium.ttf", 72.0f);
+        m_font = texture_cache::get().default_font;
+        if (!m_font)
+        {
+            m_font = std::make_shared<zwodee::font>(engine.get_renderer(), "assets/fonts/Roboto-Medium.ttf", 72.0f);
+            texture_cache::get().default_font = m_font;
+        }
         m_pause_buttons.clear();
         
         auto& r = engine.get_renderer();

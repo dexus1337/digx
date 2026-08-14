@@ -1,6 +1,7 @@
 #include "levels/digx-main-menu.hpp"
 #include "levels/digx-level.hpp"
 #include "config-manager.hpp"
+#include "assets/texture-cache.hpp"
 #include <iostream>
 #include <fstream>
 #include <string_view>
@@ -14,7 +15,12 @@ namespace digx
           m_volume_slider("Audio Volume", engine.get_audio_manager().get_volume(), 0.0f, 1.0f, 0.0f, 0.0f, 300.0f, 40.0f)
     {
         // Load the TTF font from our assets folder at 72px for high resolution
-        m_font = std::make_unique<zwodee::font>(m_engine.get_renderer(), "assets/fonts/Roboto-Medium.ttf", 72.0f);
+        m_font = texture_cache::get().default_font;
+        if (!m_font)
+        {
+            m_font = std::make_shared<zwodee::font>(m_engine.get_renderer(), "assets/fonts/Roboto-Medium.ttf", 72.0f);
+            texture_cache::get().default_font = m_font;
+        }
         m_logo_tex = m_engine.get_renderer().load_dds_texture("assets/textures/mainmenu-text.dds");
 
         // Sync sound state and initialize button layouts

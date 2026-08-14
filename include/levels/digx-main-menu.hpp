@@ -31,7 +31,7 @@ namespace digx
 
     private:
         zwodee::engine& m_engine;
-        std::unique_ptr<zwodee::font> m_font;
+        std::shared_ptr<zwodee::font> m_font;
         std::shared_ptr<zwodee::texture> m_logo_tex;
 
         int m_selected_index = 0;
