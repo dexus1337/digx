@@ -760,8 +760,6 @@ namespace digx
                         // Check if player is NOT currently standing on the spawn tile
                         if (p_gx != trigger.gx || p_gy != trigger.gy)
                         {
-
-                            
                             auto m = std::make_unique<mummy>(m_next_dynamic_mummy_id++);
                             m->set_grid_position(trigger.gx, trigger.gy);
                             m->trigger_spawn(); // Set spawned true
@@ -773,6 +771,42 @@ namespace digx
                     else
                     {
                         trigger.cooldown_ticks--;
+                    }
+                }
+            }
+        }
+
+        // Update periodic enemy spawners (soldier & mummy 5-second spawners)
+        {
+            int p_gx = static_cast<int>(std::round(m_player->get_x() / 32.0f));
+            int p_gy = static_cast<int>(std::round(m_player->get_y() / 32.0f));
+
+            for (auto& spawner : m_spawners)
+            {
+                if (spawner.cooldown_ticks > 0)
+                {
+                    spawner.cooldown_ticks--;
+                }
+                else
+                {
+                    // Check if player is NOT currently standing on the spawn tile
+                    if (p_gx != spawner.gx || p_gy != spawner.gy)
+                    {
+                        if (spawner.type == entity_type::soldier_spawner)
+                        {
+                            auto s = std::make_unique<soldier>(m_next_dynamic_mummy_id++);
+                            s->set_grid_position(spawner.gx, spawner.gy);
+                            add_entity(std::move(s));
+                        }
+                        else if (spawner.type == entity_type::mummy_spawner)
+                        {
+                            auto m = std::make_unique<mummy>(m_next_dynamic_mummy_id++);
+                            m->set_grid_position(spawner.gx, spawner.gy);
+                            m->trigger_spawn();
+                            add_entity(std::move(m));
+                        }
+
+                        spawner.cooldown_ticks = 384; // 3 seconds (3 * 128 ticks)
                     }
                 }
             }
@@ -1518,6 +1552,7 @@ namespace digx
         m_fart_y = 0.0f;
         m_active_explosions.clear();
         m_mummy_triggers.clear();
+        m_spawners.clear();
 
         m_persisted_state.garlic = 0;
         m_persisted_state.onion = 0;
@@ -2569,6 +2604,8 @@ namespace digx
 
         uint32_t next_stone_id = 800;
         m_target_gold = 0;
+        m_mummy_triggers.clear();
+        m_spawners.clear();
 
         // Read entities
         for (uint32_t i = 0; i < header.entity_count; ++i)
@@ -2600,9 +2637,17 @@ namespace digx
 
                 add_entity(std::move(goblin));
             }
-            else if (be.type_id == static_cast<uint32_t>(entity_type::mummy_spawner)) // Mummy Spawner
+            else if (be.type_id == static_cast<uint32_t>(entity_type::mummy)) // Mummy Trigger
             {
                 m_mummy_triggers.push_back({gx, gy, false, 0, false});
+            }
+            else if (be.type_id == static_cast<uint32_t>(entity_type::soldier_spawner)) // Soldier Spawner (3s)
+            {
+                m_spawners.push_back({gx, gy, entity_type::soldier_spawner, 384});
+            }
+            else if (be.type_id == static_cast<uint32_t>(entity_type::mummy_spawner)) // Mummy Spawner (3s)
+            {
+                m_spawners.push_back({gx, gy, entity_type::mummy_spawner, 384});
             }
             else if (be.type_id == static_cast<uint32_t>(entity_type::soldier)) // Soldier
             {
@@ -2619,6 +2664,7 @@ namespace digx
             else if (be.type_id == static_cast<uint32_t>(entity_type::dragon)) // Dragon
             {
                 auto d = std::make_unique<dragon>(m_next_dynamic_mummy_id++);
+                d->set_level(this);
                 d->set_grid_position(gx, gy);
                 add_entity(std::move(d));
             }

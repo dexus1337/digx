@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<tileset version="1.9" tiledversion="1.9.2" name="digx-tiles" tilewidth="32" tileheight="32" tilecount="19" columns="0">
+<tileset version="1.9" tiledversion="1.9.2" name="digx-tiles" tilewidth="96" tileheight="64" tilecount="21" columns="0">
  <grid orientation="orthogonal" width="1" height="1" />
  <tile id="0">
   <image width="32" height="32" source="dirt.png" />
@@ -10,7 +10,7 @@
  <tile id="2" type="player">
   <image width="32" height="32" source="goblin-idle-pickaxe.png" />
  </tile>
- <tile id="3" type="mummy_spawner">
+ <tile id="3" type="mummy">
   <image width="32" height="32" source="mummy-front.png" />
  </tile>
  <tile id="4" type="soldier">
@@ -20,7 +20,7 @@
   <image width="32" height="32" source="vampire-sleeping.png" />
  </tile>
  <tile id="6" type="dragon">
-  <image width="32" height="32" source="dragon-red.png" />
+  <image width="96" height="64" source="dragon-red.png" />
  </tile>
  <tile id="7" type="stone">
   <image width="32" height="32" source="stone-mid.png" />
@@ -57,5 +57,11 @@
  </tile>
  <tile id="18" type="lamp_all">
   <image width="32" height="32" source="lamp.png" />
+ </tile>
+ <tile id="19" type="soldier_spawner">
+  <image width="32" height="32" source="soldier-spawner.png" />
+ </tile>
+ <tile id="20" type="mummy_spawner">
+  <image width="32" height="32" source="mummy-spawner.png" />
  </tile>
  </tileset>

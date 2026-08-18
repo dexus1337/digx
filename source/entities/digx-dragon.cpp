@@ -18,48 +18,95 @@ namespace digx
 
     void dragon::tick()
     {
-        m_vx = m_moving_right ? m_speed : -m_speed;
-        m_vy = 0.0f;
         set_flip_horizontal(!m_moving_right);
 
-        if (m_player)
+        if (m_level)
         {
-            if (auto* lvl = dynamic_cast<digx::level*>(m_player->get_level()))
+            int min_gy = static_cast<int>(std::floor(m_y / 32.0f));
+            int max_gy = static_cast<int>(std::floor((m_y + m_height - 0.01f) / 32.0f));
+
+            if (m_moving_right)
             {
-                float next_x = m_x + m_vx;
-                int min_gx = static_cast<int>(std::floor(next_x / 32.0f));
-                int max_gx = static_cast<int>(std::floor((next_x + m_width - 0.01f) / 32.0f));
-                int min_gy = static_cast<int>(std::floor(m_y / 32.0f));
-                int max_gy = static_cast<int>(std::floor((m_y + m_height - 0.01f) / 32.0f));
+                float next_x = m_x + m_speed;
+                int check_gx = static_cast<int>(std::floor((next_x + m_width - 0.01f) / 32.0f));
 
                 bool path_clear = true;
-                for (int gy = min_gy; gy <= max_gy; ++gy)
+                if (check_gx >= static_cast<int>(m_level->get_width()))
                 {
-                    for (int gx = min_gx; gx <= max_gx; ++gx)
+                    path_clear = false;
+                }
+                else
+                {
+                    for (int gy = min_gy; gy <= max_gy; ++gy)
                     {
-                        if (!lvl->is_tile_digged(gx, gy))
+                        if (gy < 0 || gy >= static_cast<int>(m_level->get_height()) || !m_level->is_tile_digged(check_gx, gy))
                         {
                             path_clear = false;
                             break;
                         }
                     }
-                    if (!path_clear) break;
                 }
 
-                if (!path_clear)
+                if (path_clear)
                 {
-                    m_moving_right = !m_moving_right;
-                    m_vx = m_moving_right ? m_speed : -m_speed;
+                    m_vx = m_speed;
+                }
+                else
+                {
+                    m_moving_right = false;
+                    m_vx = -m_speed;
+                }
+            }
+            else
+            {
+                float next_x = m_x - m_speed;
+                int check_gx = static_cast<int>(std::floor(next_x / 32.0f));
+
+                bool path_clear = true;
+                if (check_gx < 0)
+                {
+                    path_clear = false;
+                }
+                else
+                {
+                    for (int gy = min_gy; gy <= max_gy; ++gy)
+                    {
+                        if (gy < 0 || gy >= static_cast<int>(m_level->get_height()) || !m_level->is_tile_digged(check_gx, gy))
+                        {
+                            path_clear = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (path_clear)
+                {
+                    m_vx = -m_speed;
+                }
+                else
+                {
+                    m_moving_right = true;
+                    m_vx = m_speed;
                 }
             }
         }
+        else
+        {
+            m_vx = m_moving_right ? m_speed : -m_speed;
+        }
 
+        m_vy = 0.0f;
         zwodee::entity::tick();
     }
 
     void dragon::update_behavior(player* player)
     {
         m_player = player;
+        if (player && !m_level)
+        {
+            m_level = dynamic_cast<digx::level*>(player->get_level());
+        }
+
         if (!player)
         {
             return;

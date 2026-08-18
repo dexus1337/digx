@@ -13,6 +13,7 @@
 namespace digx
 {
     class player;
+    class level;
 
     class dragon : public zwodee::entity
     {
@@ -22,14 +23,14 @@ namespace digx
         void tick() override;
 
         void update_behavior(player* player);
+        void set_level(level* lvl) { m_level = lvl; }
 
         void take_damage(int amount) override; // Overridden to be invincible
 
     private:
         float m_speed = 0.4f;
         bool m_moving_right = true;
-        float m_min_x = 0.0f;
-        float m_max_x = 500.0f;
         player* m_player = nullptr;
+        level* m_level = nullptr;
     };
 }

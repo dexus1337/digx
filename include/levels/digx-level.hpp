@@ -17,7 +17,7 @@ namespace digx
     enum class entity_type : uint32_t
     {
         player = 2,
-        mummy_spawner = 3,
+        mummy = 3,
         soldier = 4,
         vampire = 5,
         dragon = 6,
@@ -32,7 +32,9 @@ namespace digx
         pickaxe = 15,
         exit_door = 16,
         diamond_hidden = 17,
-        lamp_all = 18
+        lamp_all = 18,
+        soldier_spawner = 19,
+        mummy_spawner = 20
     };
 
     class player;
@@ -96,6 +98,16 @@ namespace digx
             bool has_spawned = false;
         };
         std::vector<spawn_trigger_tile> m_mummy_triggers;
+
+        struct enemy_spawner
+        {
+            int gx = 0;
+            int gy = 0;
+            entity_type type = entity_type::soldier_spawner;
+            int cooldown_ticks = 384; // 3 seconds (3 * 128 ticks)
+        };
+        std::vector<enemy_spawner> m_spawners;
+
         uint32_t m_next_dynamic_mummy_id = 5000;
 
         // Fart visual effect tracking
